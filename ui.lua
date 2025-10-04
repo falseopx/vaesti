@@ -1112,9 +1112,13 @@ function Library:CreateSidebar(items, opts)
         applyFocusStyling(button, self._theme, self._maid)
         end
 
-        cellMaid:GiveTask(button.MouseButton1Click:Connect(function()
-        self:_setActiveNav(item.id)
-        end))
+    cellMaid:GiveTask(button.MouseButton1Click:Connect(function()
+    self:_setActiveNav(item.id)
+    local page = self.PageArea and self.PageArea:FindFirstChild("Page_" .. tostring(item.id))
+    if page then
+      self:SetActiveTab(item.id)
+    end
+    end))
         cellMaid:GiveTask(button.MouseEnter:Connect(function()
         TweenService:Create(icon, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextColor3 = self._theme.text }):Play()
         end))
@@ -1280,6 +1284,7 @@ function Library:CreatePage(id)
 end
 
 function Library:Stack(parent, opts)
+  assert(parent, "Stack parent is required")
   opts = opts or {}
   local frame = create("Frame", {
     BackgroundTransparency = 1,
@@ -1296,6 +1301,7 @@ function Library:Stack(parent, opts)
 end
 
 function Library:Grid(parent, opts)
+  assert(parent, "Grid parent is required")
   opts = opts or {}
   local frame = create("Frame", {
     BackgroundTransparency = 1,
@@ -1312,6 +1318,7 @@ function Library:Grid(parent, opts)
 end
 
 function Library:Spacer(parent, size)
+  assert(parent, "Spacer parent is required")
   local spacer = create("Frame", {
     BackgroundTransparency = 1,
     Size = UDim2.new(1, 0, 0, size or 16),
@@ -1321,6 +1328,7 @@ function Library:Spacer(parent, size)
 end
 
 function Library:Divider(parent)
+  assert(parent, "Divider parent is required")
   local divider = create("Frame", {
     BackgroundColor3 = self._theme.stroke,
     BorderSizePixel = 0,
@@ -1331,6 +1339,7 @@ function Library:Divider(parent)
 end
 
 function Library:Card(parent, spec)
+  assert(parent, "Card parent is required")
   spec = spec or {}
   local card = create("Frame", {
     Name = spec.title or "Card",
@@ -1382,6 +1391,7 @@ end
 --// Inputs -----------------------------------------------------------------
 
 function Library:Toggle(parent, spec)
+  assert(parent, "Toggle parent is required")
   spec = spec or {}
   local wrapper = create("Frame", {
     BackgroundTransparency = 1,
@@ -1496,6 +1506,7 @@ function Library:_bindTooltip(instance, text)
 end
 
 function Library:Dropdown(parent, spec)
+  assert(parent, "Dropdown parent is required")
   spec = spec or {}
   local options = spec.options or {}
   local wrapper = create("Frame", {
@@ -1659,6 +1670,7 @@ function Library:Dropdown(parent, spec)
 end
 
 function Library:RadioGroup(parent, spec)
+  assert(parent, "RadioGroup parent is required")
   spec = spec or {}
   local wrapper = self:Stack(parent, { padding = 12 })
   local header = create("Frame", {
@@ -1793,6 +1805,7 @@ function Library:RadioGroup(parent, spec)
 end
 
 function Library:ColorSwatch(parent, spec)
+  assert(parent, "ColorSwatch parent is required")
   spec = spec or {}
   local wrapper = create("Frame", {
     BackgroundTransparency = 1,
@@ -1883,6 +1896,7 @@ function Library:ColorSwatch(parent, spec)
 end
 
 function Library:Slider(parent, spec)
+  assert(parent, "Slider parent is required")
   spec = spec or {}
   local min = spec.min or 0
   local max = spec.max or 100
@@ -1985,6 +1999,7 @@ function Library:Slider(parent, spec)
 end
 
 function Library:Keybind(parent, spec)
+  assert(parent, "Keybind parent is required")
   spec = spec or {}
   local wrapper = create("Frame", {
     BackgroundTransparency = 1,
@@ -2074,6 +2089,7 @@ function Library:Keybind(parent, spec)
 end
 
 function Library:Button(parent, spec)
+  assert(parent, "Button parent is required")
   spec = spec or {}
   local button = create("TextButton", {
     BackgroundColor3 = spec.style == "primary" and self._theme.accent or self._theme.panel,
@@ -2125,7 +2141,105 @@ function Library:Destroy()
 end
 --// Demo Builder -----------------------------------------------------------
 
-function Library:_buildAppearanceSample()
+function Library:_buildAppearanceSample(targetPage)
+  -- If a page is provided, build only the appearance sample into that page.
+  if targetPage then
+    local pageAppearance = targetPage
+    assert(pageAppearance, "Target page missing for appearance sample build")
+
+    local heading = create("TextLabel", {
+      BackgroundTransparency = 1,
+      Font = Enum.Font.GothamSemibold,
+      TextSize = 20,
+      TextColor3 = self._theme.text,
+      TextXAlignment = Enum.TextXAlignment.Left,
+      Text = "Appearance",
+      Size = UDim2.new(1, 0, 0, 28),
+    })
+    heading.Parent = pageAppearance
+
+    local subheading = create("TextLabel", {
+      BackgroundTransparency = 1,
+      Font = Enum.Font.Gotham,
+      TextSize = 13,
+      TextColor3 = self._theme.textMuted,
+      TextXAlignment = Enum.TextXAlignment.Left,
+      TextWrapped = true,
+      Text = "Change how your public dashboard looks and feels.",
+      AutomaticSize = Enum.AutomaticSize.Y,
+      Size = UDim2.new(1, 0, 0, 0),
+    })
+    subheading.Parent = pageAppearance
+
+    local brandCard = self:Card(pageAppearance, { title = "Brand color", description = "Select or customize your brand color." })
+    self:ColorSwatch(brandCard, {
+      id = "brandColor",
+      value = self._theme.accent,
+      tooltip = "Click to randomize or enter a hex value.",
+      onChanged = function(color)
+        self:Notify("Brand color updated to " .. colorToHex(color), "info", { duration = 2 })
+      end,
+    })
+
+    local chartCard = self:Card(pageAppearance, { title = "Dashboard charts", description = "How charts are displayed." })
+    self:RadioGroup(chartCard, {
+      id = "chartStyle",
+      label = "Chart style",
+      options = {
+        { id = "default", label = "Default", description = "Default company branding." },
+        { id = "simplified", label = "Simplified", description = "Minimal and modern." },
+        { id = "custom", label = "Custom CSS", description = "Manage styling with CSS." },
+      },
+      value = "default",
+      onChanged = function(option)
+        self:Notify("Chart style set to " .. option, "success", { duration = 2.5 })
+      end,
+    })
+
+    local languageCard = self:Card(pageAppearance, { title = "Language", description = "Default language for public dashboard." })
+    self:Dropdown(languageCard, {
+      id = "language",
+      options = {
+        { id = "en-uk", label = "English (UK)" },
+        { id = "en-us", label = "English (US)" },
+        { id = "fr-fr", label = "Francais" },
+        { id = "de-de", label = "Deutsch" },
+      },
+      value = "en-uk",
+      onChanged = function(value)
+        self:Notify("Language changed to " .. value, "info", { duration = 2 })
+      end,
+    })
+
+    local cookieCard = self:Card(pageAppearance, { title = "Cookie banner", description = "Display cookie banners to visitors." })
+    self:RadioGroup(cookieCard, {
+      id = "cookieBanner",
+      options = {
+        { id = "default", label = "Default", description = "Cookie controls for visitors." },
+        { id = "simplified", label = "Simplified", description = "Show a simplified banner." },
+        { id = "none", label = "None", description = "Don't show any banners." },
+      },
+      value = "default",
+      onChanged = function(value)
+        self:Notify("Cookie banner set to " .. value, "success", { duration = 2 })
+      end,
+    })
+
+    local footer = create("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 60) })
+    footer.Parent = pageAppearance
+    local footerLayout = Instance.new("UIListLayout")
+    footerLayout.FillDirection = Enum.FillDirection.Horizontal
+    footerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+    footerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    footerLayout.Padding = UDim.new(0, 12)
+    footerLayout.Parent = footer
+
+    self:Button(footer, { text = "Cancel", style = "ghost", onActivated = function() self:Notify("Changes discarded", "warn") end })
+    self:Button(footer, { text = "Save changes", style = "primary", onActivated = function() self:Notify("Settings saved", "success"); self:_persistState() end })
+    return
+  end
+
+  -- Default behavior (auto-build full sample with nav + pages)
   local sidebarItems = {
     { id = "overview", label = "Overview", icon = "??" },
     { id = "dashboards", label = "Dashboards", icon = "??" },
@@ -2151,135 +2265,12 @@ function Library:_buildAppearanceSample()
     { id = "integrations", label = "Integrations" },
   }
   self:CreateTabBar(tabs)
-
-  -- Create core pages after tab bar
   local pageAccount    = self:CreatePage("account")
   local pageAppearance = self:CreatePage("appearance")
   local pageBilling    = self:CreatePage("billing")
-
-  -- Minimal placeholders so pages are not empty
   self:Card(pageAccount, { title = "Account", description = "Manage profile & credentials." })
   self:Card(pageBilling, { title = "Billing", description = "Invoices, payment methods, usage." })
-
-  -- Build the sample UI into the appearance page
-  local heading = create("TextLabel", {
-    BackgroundTransparency = 1,
-    Font = Enum.Font.GothamSemibold,
-    TextSize = 20,
-    TextColor3 = self._theme.text,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    Text = "Appearance",
-    Size = UDim2.new(1, 0, 0, 28),
-  })
-  heading.Parent = pageAppearance
-  local subheading = create("TextLabel", {
-    BackgroundTransparency = 1,
-    Font = Enum.Font.Gotham,
-    TextSize = 13,
-    TextColor3 = self._theme.textMuted,
-    TextXAlignment = Enum.TextXAlignment.Left,
-    TextWrapped = true,
-    Text = "Change how your public dashboard looks and feels.",
-    AutomaticSize = Enum.AutomaticSize.Y,
-    Size = UDim2.new(1, 0, 0, 0),
-  })
-  subheading.Parent = pageAppearance
-
-  local brandCard = self:Card(pageAppearance, {
-    title = "Brand color",
-    description = "Select or customize your brand color.",
-  })
-  self:ColorSwatch(brandCard, {
-    id = "brandColor",
-    value = self._theme.accent,
-    tooltip = "Click to randomize or enter a hex value.",
-    onChanged = function(color)
-      self:Notify("Brand color updated to " .. colorToHex(color), "info", { duration = 2 })
-    end,
-  })
-
-  local chartCard = self:Card(pageAppearance, {
-    title = "Dashboard charts",
-    description = "How charts are displayed.",
-  })
-  self:RadioGroup(chartCard, {
-    id = "chartStyle",
-    label = "Chart style",
-    options = {
-      { id = "default", label = "Default", description = "Default company branding." },
-      { id = "simplified", label = "Simplified", description = "Minimal and modern." },
-      { id = "custom", label = "Custom CSS", description = "Manage styling with CSS." },
-    },
-    value = "default",
-    onChanged = function(option)
-      self:Notify("Chart style set to " .. option, "success", { duration = 2.5 })
-    end,
-  })
-
-  local languageCard = self:Card(pageAppearance, {
-    title = "Language",
-    description = "Default language for public dashboard.",
-  })
-  self:Dropdown(languageCard, {
-    id = "language",
-    options = {
-      { id = "en-uk", label = "English (UK)" },
-      { id = "en-us", label = "English (US)" },
-      { id = "fr-fr", label = "Francais" },
-      { id = "de-de", label = "Deutsch" },
-    },
-    value = "en-uk",
-    onChanged = function(value)
-      self:Notify("Language changed to " .. value, "info", { duration = 2 })
-    end,
-  })
-
-  local cookieCard = self:Card(pageAppearance, {
-    title = "Cookie banner",
-    description = "Display cookie banners to visitors.",
-  })
-  self:RadioGroup(cookieCard, {
-    id = "cookieBanner",
-    options = {
-      { id = "default", label = "Default", description = "Cookie controls for visitors." },
-      { id = "simplified", label = "Simplified", description = "Show a simplified banner." },
-      { id = "none", label = "None", description = "Don't show any banners." },
-    },
-    value = "default",
-    onChanged = function(value)
-      self:Notify("Cookie banner set to " .. value, "success", { duration = 2 })
-    end,
-  })
-
-  local footer = create("Frame", {
-    BackgroundTransparency = 1,
-    Size = UDim2.new(1, 0, 0, 60),
-  })
-  footer.Parent = pageAppearance
-  local footerLayout = Instance.new("UIListLayout")
-  footerLayout.FillDirection = Enum.FillDirection.Horizontal
-  footerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-  footerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-  footerLayout.Padding = UDim.new(0, 12)
-  footerLayout.Parent = footer
-
-  self:Button(footer, {
-    text = "Cancel",
-    style = "ghost",
-    onActivated = function()
-      self:Notify("Changes discarded", "warn")
-    end,
-  })
-
-  self:Button(footer, {
-    text = "Save changes",
-    style = "primary",
-    onActivated = function()
-      self:Notify("Settings saved", "success")
-      self:_persistState()
-    end,
-  })
-
+  self:_buildAppearanceSample(pageAppearance) -- reuse simplified path
   self:SetActiveTab("appearance")
 end
 
