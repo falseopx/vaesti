@@ -1119,9 +1119,14 @@ function Library:CreateSidebar(items, opts)
 
     cellMaid:GiveTask(button.MouseButton1Click:Connect(function()
     self:_setActiveNav(item.id)
-    local page = self.PageArea and self.PageArea:FindFirstChild("Page_" .. tostring(item.id))
-    if page then
-      self:SetActiveTab(item.id)
+    local sid = tostring(item.id)
+    if self._sections and self._sections[sid] then
+      self:SetActiveSection(sid)
+    else
+      local page = self.PageArea and self.PageArea:FindFirstChild("Page_" .. sid)
+      if page then
+        self:SetActiveTab(sid)
+      end
     end
     end))
         cellMaid:GiveTask(button.MouseEnter:Connect(function()
@@ -1224,18 +1229,146 @@ function Library:CreateTabBar(tabs)
   return self.TabBarHolder
 end
 
-function Library:SetActiveTab(id)
-  if not id then return end
-  id = tostring(id)
-  if self._activeTab == id then return end
-  self._activeTab = id
-  for tabId, comp in pairs(self._tabButtons) do
-    local selected = tostring(tabId) == id
-    if comp.Label     then comp.Label.TextColor3 = selected and self._theme.text or self._theme.textMuted end
+--// Sections & Routing (new) ----------------------------------------------
+
+function Library:CreateSection(sectionId, def)
+  sectionId = tostring(sectionId)
+  local sec = self._sections[sectionId]
+  if not sec then
+    sec = { tabs = def and def.tabs or {}, pages = {}, defaultTab = (def and def.defaultTab), container = nil }
+    self._sections[sectionId] = sec
+    local container = self.PageArea:FindFirstChild("Section_" .. sectionId)
+    if not container then
+      container = create("Frame", {
+        Name = "Section_" .. sectionId,
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1,0,0,0),
+        Visible = false,
+        LayoutOrder = #(self.PageArea:GetChildren()) + 1,
+      })
+      container.Parent = self.PageArea
+      local layout = Instance.new("UIListLayout")
+      layout.FillDirection = Enum.FillDirection.Vertical
+      layout.Padding = UDim.new(0, 16)
+      layout.SortOrder = Enum.SortOrder.LayoutOrder
+      layout.Parent = container
+    end
+    sec.container = container
+  else
+    if def and def.tabs then sec.tabs = def.tabs end
+    if def and def.defaultTab then sec.defaultTab = def.defaultTab end
+  end
+  return sec
+end
+
+function Library:CreatePage(a, b)
+  local sectionId, tabId
+  if b == nil then
+    sectionId, tabId = "settings", tostring(a)
+  else
+    sectionId, tabId = tostring(a), tostring(b)
+  end
+  local sec = self._sections[sectionId] or self:CreateSection(sectionId, nil)
+  local container = sec.container
+  local page = create("Frame", {
+    Name = "Page_" .. tabId,
+    BackgroundTransparency = 1,
+    AutomaticSize = Enum.AutomaticSize.Y,
+    Size = UDim2.new(1, 0, 0, 0),
+    Visible = false,
+    LayoutOrder = #(container:GetChildren()) + 1,
+  })
+  page.Parent = container
+  local layout = Instance.new("UIListLayout")
+  layout.FillDirection = Enum.FillDirection.Vertical
+  layout.Padding = UDim.new(0, 16)
+  layout.SortOrder = Enum.SortOrder.LayoutOrder
+  layout.Parent = page
+  sec.pages[tabId] = page
+  return page
+end
+
+function Library:_rebuildTabBarForSection(sectionId)
+  sectionId = tostring(sectionId)
+  local sec = self._sections[sectionId]; if not sec then return end
+  -- clear existing tab buttons visually
+  for _, child in ipairs(self.TabBarHolder:GetChildren()) do
+    if child:IsA("GuiObject") then child:Destroy() end
+  end
+  for k in pairs(self._tabButtons) do self._tabButtons[k] = nil end
+  -- rebuild
+  for index, info in ipairs(sec.tabs) do
+    local tab = create("TextButton", {
+      Name = "Tab" .. (info.id or index),
+      BackgroundTransparency = 1,
+      Size = UDim2.new(0, 0, 1, -12),
+      AutomaticSize = Enum.AutomaticSize.X,
+      AutoButtonColor = false,
+      Text = "",
+      LayoutOrder = index,
+    })
+    tab.Parent = self.TabBarHolder
+    local label = create("TextLabel", {
+      BackgroundTransparency = 1,
+      Font = Enum.Font.GothamSemibold,
+      TextSize = 14,
+      TextXAlignment = Enum.TextXAlignment.Left,
+      TextYAlignment = Enum.TextYAlignment.Center,
+      Text = info.label,
+      TextColor3 = self._theme.textMuted,
+      AutomaticSize = Enum.AutomaticSize.X,
+      Size = UDim2.new(0, 0, 1, 0),
+    })
+    label.Parent = tab
+    local underline = create("Frame", {
+      BackgroundColor3 = self._theme.accent,
+      Size = UDim2.new(1, 0, 0, 2),
+      AnchorPoint = Vector2.new(0, 1),
+      Position = UDim2.new(0, 0, 1, 0),
+      Visible = false,
+    })
+    underline.Parent = tab
+    local maid = Maid.new()
+    applyFocusStyling(tab, self._theme, maid)
+    maid:GiveTask(tab.MouseButton1Click:Connect(function()
+      self:SetActiveTab(info.id)
+    end))
+    self._tabButtons[info.id] = { Instance = tab, Label = label, Underline = underline, Maid = maid }
+  end
+end
+
+function Library:SetActiveSection(sectionId)
+  sectionId = tostring(sectionId)
+  if self._activeSectionId == sectionId then return end
+  self._activeSectionId = sectionId
+  for _, child in ipairs(self.PageArea:GetChildren()) do
+    if child:IsA("GuiObject") and child.Name:match("^Section_") then
+      child.Visible = (child.Name == "Section_" .. sectionId)
+    end
+  end
+  self:_rebuildTabBarForSection(sectionId)
+  local sec = self._sections[sectionId]; if not sec then return end
+  local first = (sec.tabs[1] and sec.tabs[1].id) and tostring(sec.tabs[1].id) or nil
+  local nextTab = self._activeTabs[sectionId] or sec.defaultTab or first
+  if nextTab then self:SetActiveTab(nextTab) end
+end
+
+function Library:SetActiveTab(tabId)
+  if not tabId then return end
+  tabId = tostring(tabId)
+  local sectionId = self._activeSectionId or "settings"
+  local sec = self._sections[sectionId]; if not sec then return end
+  if self._activeTabs[sectionId] == tabId then return end
+  self._activeTabs[sectionId] = tabId
+  for tid, comp in pairs(self._tabButtons) do
+    local selected = (tostring(tid) == tabId)
+    if comp.Label then comp.Label.TextColor3 = selected and self._theme.text or self._theme.textMuted end
     if comp.Underline then comp.Underline.Visible = selected end
   end
-  local targetName = "Page_" .. id
-  for _, child in ipairs(self.PageArea:GetChildren()) do
+  local targetName = "Page_" .. tabId
+  local container = sec.container
+  for _, child in ipairs(container:GetChildren()) do
     if child:IsA("GuiObject") and child.Name:match("^Page_") then
       child.Visible = (child.Name == targetName)
     end
@@ -1243,35 +1376,8 @@ function Library:SetActiveTab(id)
   if self.PageArea:IsA("ScrollingFrame") then
     self.PageArea.CanvasPosition = Vector2.new(0,0)
   end
-  self._signals.TabSelected:Fire(id)
+  self._signals.TabSelected:Fire(tabId)
   self:_markDirty()
-end
---// Page & Layout Helpers --------------------------------------------------
-
-function Library:CreatePage(id)
-    id = tostring(id)
-    local page = create("Frame", {
-        Name = "Page_" .. id,
-        BackgroundTransparency = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Size = UDim2.new(1, 0, 0, 0),
-        Visible = false,
-        LayoutOrder = (#self._pages) + 1,
-    })
-    page.Parent = self.PageArea
-
-    local layout = Instance.new("UIListLayout")
-    layout.FillDirection = Enum.FillDirection.Vertical
-    layout.Padding = UDim.new(0, 16)
-    layout.SortOrder = Enum.SortOrder.LayoutOrder
-    layout.Parent = page
-
-    self._pages[id] = page
-
-    if not self._activeTab then
-        self:SetActiveTab(id)
-    end
-    return page
 end
 
 function Library:Stack(parent, opts)
@@ -2231,39 +2337,29 @@ function Library:_buildAppearanceSample(targetPage)
     return
   end
 
-  -- Default behavior (auto-build full sample with nav + pages)
+  -- Default behavior (auto-build with a single 'settings' section)
   local sidebarItems = {
-    { id = "overview", label = "Overview", icon = "??" },
-    { id = "dashboards", label = "Dashboards", icon = "??" },
-    { id = "projects", label = "All projects", icon = "??" },
-    { id = "analyze", label = "Analyze", icon = "??" },
-    { id = "access", label = "Manage access", icon = "??" },
-    { group = true, label = "Data management" },
-    { id = "charts", label = "All charts", icon = "??" },
-    { id = "events", label = "Explore events", icon = "??" },
-    { id = "labels", label = "Visual labels", icon = "??" },
-    { id = "live", label = "Live data feed", icon = "??" },
+    { id = "settings", label = "Settings", icon = "??" },
+    { group = true, label = "Other" },
     { id = "support", label = "Support", icon = "?" },
-    { id = "appearance", label = "Appearance", icon = "??" },
   }
-  self:CreateSidebar(sidebarItems, { defaultId = "appearance" })
-  local tabs = {
-    { id = "account", label = "Account" },
-    { id = "profile", label = "Profile" },
-    { id = "security", label = "Security" },
-    { id = "appearance", label = "Appearance" },
-    { id = "notifications", label = "Notifications" },
-    { id = "billing", label = "Billing" },
-    { id = "integrations", label = "Integrations" },
-  }
-  self:CreateTabBar(tabs)
-  local pageAccount    = self:CreatePage("account")
-  local pageAppearance = self:CreatePage("appearance")
-  local pageBilling    = self:CreatePage("billing")
+  self:CreateSidebar(sidebarItems, { defaultId = "settings" })
+
+  self:CreateSection("settings", {
+    tabs = {
+      { id = "account",    label = "Account" },
+      { id = "appearance", label = "Appearance" },
+      { id = "billing",    label = "Billing" },
+    },
+    defaultTab = "appearance",
+  })
+  local pageAccount    = self:CreatePage("settings", "account")
+  local pageAppearance = self:CreatePage("settings", "appearance")
+  local pageBilling    = self:CreatePage("settings", "billing")
   self:Card(pageAccount, { title = "Account", description = "Manage profile & credentials." })
   self:Card(pageBilling, { title = "Billing", description = "Invoices, payment methods, usage." })
-  self:_buildAppearanceSample(pageAppearance) -- reuse simplified path
-  self:SetActiveTab("appearance")
+  self:_buildAppearanceSample(pageAppearance)
+  self:SetActiveSection("settings")
 end
 
 return Library
