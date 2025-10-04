@@ -163,17 +163,17 @@ end
 local Themes = {
     dark = {
         name = "dark",
-        radii = { xs = 6, sm = 10, md = 14, lg = 20 },
+        radii = { xs = 6, sm = 10, md = 14, lg = 18 },
         spacing = { 4, 6, 8, 12, 16, 24, 32 },
         colors = {
-            bg = hex("#14161b"),
-            surface = hex("#191c21"),
-            surfaceAlt = hex("#1f232a"),
-            stroke = hex("#2a2f38"),
-            text = hex("#e7e9ee"),
-            textMuted = hex("#9aa3af"),
+            bg = hex("#16181c"),
+            surface = hex("#1a1d22"),
+            surfaceAlt = hex("#20242b"),
+            stroke = hex("#2a2f39"),
+            text = hex("#e8ebf2"),
+            textMuted = hex("#a3abb6"),
             accent = hex("#a46aff"),
-            focus = hex("#d6d9e0"),
+            focus = hex("#d4d9e1"),
         },
         tween = {
             hover = { time = 0.12, style = Enum.EasingStyle.Quad, direction = Enum.EasingDirection.Out },
@@ -182,17 +182,17 @@ local Themes = {
     },
     mature = {
         name = "mature",
-        radii = { xs = 6, sm = 10, md = 14, lg = 20 },
+        radii = { xs = 6, sm = 10, md = 14, lg = 18 },
         spacing = { 4, 6, 8, 12, 16, 24, 32 },
         colors = {
-            bg = hex("#14161b"),
-            surface = hex("#191c21"),
-            surfaceAlt = hex("#1f232a"),
-            stroke = hex("#2a2f38"),
-            text = hex("#e7e9ee"),
-            textMuted = hex("#9aa3af"),
-            accent = hex("#a46aff"), -- could differentiate if desired
-            focus = hex("#d6d9e0"),
+            bg = hex("#16181c"),
+            surface = hex("#1a1d22"),
+            surfaceAlt = hex("#20242b"),
+            stroke = hex("#2a2f39"),
+            text = hex("#e8ebf2"),
+            textMuted = hex("#a3abb6"),
+            accent = hex("#a46aff"), -- keep purple
+            focus = hex("#d4d9e1"),
         },
         tween = {
             hover = { time = 0.12, style = Enum.EasingStyle.Quad, direction = Enum.EasingDirection.Out },
@@ -348,19 +348,45 @@ function UI:CreateSection(sectionId: string, def: {tabs: {{id: string, label: st
         container = container,
     }
 
-    -- Sidebar button (simple list item)
+    -- Sidebar button styled
     self._sidebarButtons = self._sidebarButtons or {}
-    local btn = create("TextButton", {
-        Name = "SectionButton_" .. sectionId,
-        Text = sectionId,
-        Font = Enum.Font.Gotham,
-        TextSize = 14,
-        TextColor3 = self._theme.colors.textMuted,
-        BackgroundTransparency = 1,
-        AutoButtonColor = false,
-        Size = UDim2.new(1, 0, 0, 28),
-        Parent = self._sidebar,
-    })
+    local btn = Instance.new("TextButton")
+    btn.Name = "SectionButton_" .. sectionId
+    btn.Text = sectionId
+    btn.Font = Enum.Font.Gotham
+    btn.TextSize = 14
+    btn.TextColor3 = self._theme.colors.textMuted
+    btn.AutoButtonColor = false
+    btn.BackgroundColor3 = self._theme.colors.surface
+    btn.BackgroundTransparency = 1
+    btn.BorderSizePixel = 0
+    btn.Size = UDim2.new(1, -8, 0, 32)
+    btn.Position = UDim2.new(0,4,0,0)
+    btn.Parent = self._sidebar
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, self._theme.radii.xs); corner.Parent = btn
+    local pad = Instance.new("UIPadding"); pad.PaddingLeft = UDim.new(0,12); pad.PaddingRight = UDim.new(0,12); pad.Parent = btn
+    local accentBar = Instance.new("Frame")
+    accentBar.Name = "Accent"
+    accentBar.BackgroundColor3 = self._theme.colors.accent
+    accentBar.BorderSizePixel = 0
+    accentBar.Size = UDim2.new(0,2,1,0)
+    accentBar.Position = UDim2.new(0,0,0,0)
+    accentBar.Visible = false
+    accentBar.Parent = btn
+    self:_applyFocusRing(btn)
+    local TweenService = game:GetService("TweenService")
+    local hoverInfo = TweenInfo.new(self._theme.tween.hover.time, self._theme.tween.hover.style, self._theme.tween.hover.direction)
+    btn.MouseEnter:Connect(function()
+        if not accentBar.Visible then
+            TweenService:Create(btn, hoverInfo, { BackgroundTransparency = 0 }):Play()
+            TweenService:Create(btn, hoverInfo, { BackgroundColor3 = self._theme.colors.surfaceAlt }):Play()
+        end
+    end)
+    btn.MouseLeave:Connect(function()
+        if not accentBar.Visible then
+            TweenService:Create(btn, hoverInfo, { BackgroundTransparency = 1 }):Play()
+        end
+    end)
     btn.MouseButton1Click:Connect(function()
         if self._sections[sectionId] then
             self:SetActiveSection(sectionId)
@@ -404,54 +430,89 @@ end
 
 function UI:_rebuildTabBarForSection(sectionId: string)
     self._tabButtons = self._tabButtons or {}
-    -- Clear recorded buttons
     for k in pairs(self._tabButtons) do self._tabButtons[k] = nil end
-    -- Remove existing tab button instances (keep Title label)
+    -- Remove all except Title and Divider
     for _, ch in ipairs(self._tabBar:GetChildren()) do
-        if not (ch:IsA("TextLabel") and ch.Name == "Title") then
+        if not ((ch:IsA("TextLabel") and ch.Name == "Title") or (ch:IsA("Frame") and ch.Name == "Divider")) then
             ch:Destroy()
         end
     end
-
+    local theme = self._theme
     local sec = self._sections[sectionId]
     if not sec then return end
-    local theme = self._theme
+    local divider = self._tabBar:FindFirstChild("Divider")
+    if not divider then
+        divider = Instance.new("Frame")
+        divider.Name = "Divider"
+        divider.BackgroundColor3 = theme.colors.stroke
+        divider.BackgroundTransparency = 0.5
+        divider.BorderSizePixel = 0
+        divider.AnchorPoint = Vector2.new(0,1)
+        divider.Position = UDim2.new(0,0,1,0)
+        divider.Size = UDim2.new(1,0,0,1)
+        divider.Parent = self._tabBar
+    end
+    local chipRow = Instance.new("Frame")
+    chipRow.Name = "ChipRow"
+    chipRow.BackgroundTransparency = 1
+    chipRow.AutomaticSize = Enum.AutomaticSize.Y
+    chipRow.Size = UDim2.new(1,-16,0,36)
+    chipRow.Position = UDim2.new(0,8,0,6)
+    chipRow.Parent = self._tabBar
+    local rowLayout = Instance.new("UIListLayout")
+    rowLayout.FillDirection = Enum.FillDirection.Horizontal
+    rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    rowLayout.Padding = UDim.new(0,8)
+    rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rowLayout.Parent = chipRow
     local TextService = game:GetService("TextService")
-    local xOffset = 120 -- leave space for title left side
-    local padding = 8
+    local TweenService = game:GetService("TweenService")
+    local hoverInfo = TweenInfo.new(theme.tween.hover.time, theme.tween.hover.style, theme.tween.hover.direction)
+    local function hoverColor()
+        return theme.colors.surfaceAlt:lerp(theme.colors.text, 0.08)
+    end
     for _, spec in ipairs(sec.tabs) do
         local id = tostring(spec.id)
         local labelText = spec.label or spec.id
-        local textSize = TextService:GetTextSize(labelText, 14, Enum.Font.GothamMedium, Vector2.new(1000, 32))
-        local btnWidth = textSize.X + 24
-        local btn = create("TextButton", {
-            Name = "Tab_" .. id,
-            Text = labelText,
-            Font = Enum.Font.GothamMedium,
-            TextSize = 14,
-            TextColor3 = theme.colors.textMuted,
-            AutoButtonColor = false,
-            BackgroundTransparency = 0.9,
-            BackgroundColor3 = theme.colors.surfaceAlt,
-            Size = UDim2.new(0, btnWidth, 0, 32),
-            Position = UDim2.new(0, xOffset, 0, 8),
-            Parent = self._tabBar,
-        })
-        applyCorner(btn, self._theme.radii.sm)
-        local underlineFrame = create("Frame", {
-            Name = "Underline",
-            BackgroundColor3 = theme.colors.accent,
-            BorderSizePixel = 0,
-            Size = UDim2.new(1, 0, 0, 2),
-            Position = UDim2.new(0, 0, 1, -2),
-            Visible = false,
-            Parent = btn,
-        })
-        btn.MouseButton1Click:Connect(function()
+        local width = math.max(96, TextService:GetTextSize(labelText, 14, Enum.Font.GothamMedium, Vector2.new(1000,32)).X + 16)
+        local chip = Instance.new("TextButton")
+        chip.Name = "Chip_" .. id
+        chip.Text = labelText
+        chip.Font = Enum.Font.GothamMedium
+        chip.TextSize = 14
+        chip.TextColor3 = theme.colors.textMuted
+        chip.AutoButtonColor = false
+        chip.BackgroundColor3 = theme.colors.surfaceAlt
+        chip.BorderSizePixel = 0
+        chip.Size = UDim2.new(0,width,1,0)
+        chip.Parent = chipRow
+        local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, theme.radii.sm); corner.Parent = chip
+        local stroke = Instance.new("UIStroke"); stroke.Color = theme.colors.stroke; stroke.Transparency = 0.2; stroke.Thickness = 1; stroke.Parent = chip
+        local underline = Instance.new("Frame")
+        underline.Name = "Underline"
+        underline.BackgroundColor3 = theme.colors.accent
+        underline.BorderSizePixel = 0
+        underline.Size = UDim2.new(1,0,0,2)
+        underline.Position = UDim2.new(0,0,1,-2)
+        underline.Visible = false
+        underline.Parent = chip
+        self:_applyFocusRing(chip)
+        chip.MouseEnter:Connect(function()
+            if not underline.Visible then
+                TweenService:Create(chip, hoverInfo, { BackgroundColor3 = hoverColor() }):Play()
+                TweenService:Create(chip, hoverInfo, { TextColor3 = theme.colors.text }):Play()
+            end
+        end)
+        chip.MouseLeave:Connect(function()
+            if not underline.Visible then
+                TweenService:Create(chip, hoverInfo, { BackgroundColor3 = theme.colors.surfaceAlt }):Play()
+                TweenService:Create(chip, hoverInfo, { TextColor3 = theme.colors.textMuted }):Play()
+            end
+        end)
+        chip.MouseButton1Click:Connect(function()
             self:SetActiveTab(id)
         end)
-        self._tabButtons[id] = { Label = btn, Underline = underlineFrame }
-        xOffset += btnWidth + padding
+        self._tabButtons[id] = { Label = chip, Underline = underline }
     end
 end
 
@@ -466,10 +527,16 @@ function UI:SetActiveSection(sectionId: string)
     -- Sidebar highlight
     if self._sidebarButtons then
         for id, btn in pairs(self._sidebarButtons) do
+            local accent = btn:FindFirstChild("Accent")
             if id == sectionId then
-                btn.TextColor3 = self._theme.colors.accent
+                btn.TextColor3 = self._theme.colors.text
+                if accent then accent.Visible = true end
+                btn.BackgroundTransparency = 0
+                btn.BackgroundColor3 = self._theme.colors.surfaceAlt
             else
                 btn.TextColor3 = self._theme.colors.textMuted
+                if accent then accent.Visible = false end
+                btn.BackgroundTransparency = 1
             end
         end
     end
@@ -504,11 +571,12 @@ function UI:SetActiveTab(tabId: string)
         end
     end
 
-    -- update current section's tab button visuals
+    -- update chip visuals
     for tid, comp in pairs(self._tabButtons or {}) do
         local selected = tostring(tid) == tabId
         if comp.Label then
             comp.Label.TextColor3 = selected and self._theme.colors.text or self._theme.colors.textMuted
+            comp.Label.BackgroundColor3 = self._theme.colors.surfaceAlt
         end
         if comp.Underline then
             comp.Underline.Visible = selected
@@ -542,6 +610,24 @@ end
 ---------------------------------------------------------------------
 -- Components
 ---------------------------------------------------------------------
+function UI:_applyFocusRing(obj: GuiObject)
+    local stroke = Instance.new("UIStroke")
+    stroke.Name = "FocusRing"
+    stroke.Color = self._theme.colors.focus
+    stroke.Thickness = 1
+    stroke.Transparency = 0.5
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.Enabled = false
+    stroke.Parent = obj
+    if obj:IsA("TextButton") then
+        obj.SelectionGained:Connect(function()
+            stroke.Enabled = true
+        end)
+        obj.SelectionLost:Connect(function()
+            stroke.Enabled = false
+        end)
+    end
+end
 function UI:Card(parent: Instance, spec: {title: string, description: string?}): Frame
     local t = self._theme
     local card = Instance.new("Frame")
@@ -675,7 +761,25 @@ function UI.new(opts: NewOptions?): UIInstance
         Parent = screen,
     })
     applyCorner(window, theme.radii.lg)
-    applyStroke(window, theme.colors.stroke, 1, 0.2)
+    applyStroke(window, theme.colors.stroke, 1, 0.15)
+    -- Soft shadow approximation
+    local shadow = Instance.new("Frame")
+    shadow.Name = "Shadow"
+    shadow.BackgroundTransparency = 1
+    shadow.Size = window.Size
+    shadow.Position = window.Position
+    shadow.AnchorPoint = window.AnchorPoint
+    shadow.ZIndex = 0
+    shadow.Parent = screen
+    local shadowInner = Instance.new("Frame")
+    shadowInner.Name = "BlurApprox"
+    shadowInner.BackgroundColor3 = Color3.new(0,0,0)
+    shadowInner.BackgroundTransparency = 0.85
+    shadowInner.Size = UDim2.new(1,16,1,16)
+    shadowInner.Position = UDim2.new(0,-8,0,-4)
+    shadowInner.BorderSizePixel = 0
+    shadowInner.Parent = shadow
+    local shadowCorner = Instance.new("UICorner"); shadowCorner.CornerRadius = UDim.new(0, theme.radii.lg + 4); shadowCorner.Parent = shadowInner
 
     -- Sticker (decor/branding / handle)
     local sticker = create("Frame", {
@@ -749,10 +853,10 @@ function UI.new(opts: NewOptions?): UIInstance
         Text = opts.Title or "Vaesti UI",
         Font = Enum.Font.GothamBold,
         TextSize = 18,
-        TextColor3 = theme.colors.text,
+        TextColor3 = theme.colors.textMuted,
         BackgroundTransparency = 1,
-        Size = UDim2.new(1, -16, 1, 0),
-        Position = UDim2.new(0, 8, 0, 0),
+        Size = UDim2.new(0,120,1,0),
+        Position = UDim2.new(0,8,0,0),
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = tabBar,
         ZIndex = 3,
