@@ -399,12 +399,15 @@ function UI:CreatePage(a: string, b: string?): Frame
 end
 
 function UI:_rebuildTabBarForSection(sectionId: string)
-    -- Remove old tab buttons (keep Title label if present)
     self._tabButtons = self._tabButtons or {}
-    for _, rec in pairs(self._tabButtons) do
-        if rec.Button and rec.Button.Destroy then rec.Button:Destroy() end
+    -- Clear recorded buttons
+    for k in pairs(self._tabButtons) do self._tabButtons[k] = nil end
+    -- Remove existing tab button instances (keep Title label)
+    for _, ch in ipairs(self._tabBar:GetChildren()) do
+        if not (ch:IsA("TextLabel") and ch.Name == "Title") then
+            ch:Destroy()
+        end
     end
-    self._tabButtons = {}
 
     local sec = self._sections[sectionId]
     if not sec then return end
@@ -412,13 +415,14 @@ function UI:_rebuildTabBarForSection(sectionId: string)
     local TextService = game:GetService("TextService")
     local xOffset = 120 -- leave space for title left side
     local padding = 8
-    for _, tab in ipairs(sec.tabs) do
-        local label = tab.label or tab.id
-        local textSize = TextService:GetTextSize(label, 14, Enum.Font.GothamMedium, Vector2.new(1000, 32))
+    for _, spec in ipairs(sec.tabs) do
+        local id = tostring(spec.id)
+        local labelText = spec.label or spec.id
+        local textSize = TextService:GetTextSize(labelText, 14, Enum.Font.GothamMedium, Vector2.new(1000, 32))
         local btnWidth = textSize.X + 24
-        local button = create("TextButton", {
-            Name = "Tab_" .. tab.id,
-            Text = label,
+        local btn = create("TextButton", {
+            Name = "Tab_" .. id,
+            Text = labelText,
             Font = Enum.Font.GothamMedium,
             TextSize = 14,
             TextColor3 = theme.colors.textMuted,
@@ -429,26 +433,27 @@ function UI:_rebuildTabBarForSection(sectionId: string)
             Position = UDim2.new(0, xOffset, 0, 8),
             Parent = self._tabBar,
         })
-        applyCorner(button, self._theme.radii.sm)
-        local underline = create("Frame", {
+        applyCorner(btn, self._theme.radii.sm)
+        local underlineFrame = create("Frame", {
             Name = "Underline",
             BackgroundColor3 = theme.colors.accent,
             BorderSizePixel = 0,
             Size = UDim2.new(1, 0, 0, 2),
             Position = UDim2.new(0, 0, 1, -2),
             Visible = false,
-            Parent = button,
+            Parent = btn,
         })
-        self._tabButtons[tab.id] = { Button = button, Underline = underline }
-        button.MouseButton1Click:Connect(function()
-            self:SetActiveTab(tab.id)
+        btn.MouseButton1Click:Connect(function()
+            self:SetActiveTab(id)
         end)
+        self._tabButtons[id] = { Label = btn, Underline = underlineFrame }
         xOffset += btnWidth + padding
     end
 end
 
 function UI:SetActiveSection(sectionId: string)
     if not self._sections or not self._sections[sectionId] then return end
+    sectionId = tostring(sectionId)
     self._activeSectionId = sectionId
     -- Hide all sections, show target
     for id, sec in pairs(self._sections) do
@@ -474,32 +479,47 @@ function UI:SetActiveSection(sectionId: string)
 end
 
 function UI:SetActiveTab(tabId: string)
-    local sectionId = self._activeSectionId or "settings"
-    local sec = self._sections and self._sections[sectionId]
-    if not sec then return end
-    -- Toggle pages
-    for id, page in pairs(sec.pages) do
-        page.Visible = (id == tabId)
-    end
-    -- Update tab button visuals
-    if self._tabButtons then
-        for id, rec in pairs(self._tabButtons) do
-            if rec.Button then
-                if id == tabId then
-                    rec.Button.TextColor3 = self._theme.colors.text
-                    rec.Underline.Visible = true
-                else
-                    rec.Button.TextColor3 = self._theme.colors.textMuted
-                    rec.Underline.Visible = false
-                end
-            end
+    if not tabId then return end
+    tabId = tostring(tabId)
+
+    -- find current section
+    local sid = self._activeSectionId or "settings"
+    local sec = self._sections and self._sections[sid]
+    if not sec or not sec.container then return end
+
+    -- no-op if already active
+    self._activeTabs = self._activeTabs or {}
+    if self._activeTabs[sid] == tabId then return end
+    self._activeTabs[sid] = tabId
+
+    -- toggle pages inside this section only
+    local targetName = "Page_" .. tabId
+    for _, child in ipairs(sec.container:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name:match("^Page_") then
+            child.Visible = (child.Name == targetName)
         end
     end
-    self._activeTabs = self._activeTabs or {}
-    self._activeTabs[sectionId] = tabId
-    if self._pageArea and self._pageArea:IsA("ScrollingFrame") then
-        self._pageArea.CanvasPosition = Vector2.new(0, 0)
+
+    -- update current section's tab button visuals
+    for tid, comp in pairs(self._tabButtons or {}) do
+        local selected = tostring(tid) == tabId
+        if comp.Label then
+            comp.Label.TextColor3 = selected and self._theme.colors.text or self._theme.colors.textMuted
+        end
+        if comp.Underline then
+            comp.Underline.Visible = selected
+        end
     end
+
+    -- reset scroll to top
+    if self._pageArea and self._pageArea:IsA("ScrollingFrame") then
+        self._pageArea.CanvasPosition = Vector2.new(0,0)
+    end
+
+    if self._signals and self._signals.TabSelected then
+        self._signals.TabSelected:Fire(tabId)
+    end
+    if self._markDirty then self:_markDirty() end
 end
 
 ---------------------------------------------------------------------
