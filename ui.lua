@@ -245,6 +245,7 @@ export type UIInstance = {
     _signals: {[string]: any},
     _theme: {[string]: any},
     setLayerAndLayout: (self: UIInstance) -> (),
+    EnableDebug: (self: UIInstance, on: boolean) -> (),
     Destroy: (self: UIInstance) -> (),
 }
 
@@ -275,43 +276,33 @@ end
 ---------------------------------------------------------------------
 -- Debug Tinting
 ---------------------------------------------------------------------
-local debugColors = {
-    sidebar = Color3.fromRGB(120, 60, 170), -- purple
-    content = Color3.fromRGB(40, 170, 90),  -- green
-    tabbar = Color3.fromRGB(220, 140, 40),  -- orange
-    page = Color3.fromRGB(30, 90, 200),     -- blue
-    sticker = Color3.fromRGB(50, 50, 50),   -- dark grey
-}
-
-local function storeOriginalColor(inst: GuiObject)
-    if not inst:GetAttribute("_origColor") then
-        inst:SetAttribute("_origColor", inst.BackgroundColor3:ToHex())
-    end
-end
-
-local function restoreOriginalColor(inst: GuiObject)
-    local hexVal = inst:GetAttribute("_origColor")
-    if hexVal then
-        inst.BackgroundColor3 = hex("#" .. hexVal)
-    end
-end
-
-function Module.EnableDebug(self: UIInstance, on: boolean)
+-- Instance method version of EnableDebug (replaces previous module-level function)
+function UI:EnableDebug(on: boolean)
     if not self or not self._content then return end
     local layers: {GuiObject} = { self._sidebar, self._content, self._tabBar, self._pageArea, self._sticker }
+
+    local function storeOriginalColor(inst: GuiObject)
+        if not inst:GetAttribute("_origColor") then
+            inst:SetAttribute("_origColor", inst.BackgroundColor3:ToHex())
+        end
+    end
+
+    local function restoreOriginalColor(inst: GuiObject)
+        local hexVal = inst:GetAttribute("_origColor")
+        if hexVal then
+            inst.BackgroundColor3 = hex("#" .. hexVal)
+        end
+    end
+
     if on then
-        for _, layer in ipairs(layers) do
-            storeOriginalColor(layer)
-        end
-        self._sidebar.BackgroundColor3 = debugColors.sidebar
-        self._content.BackgroundColor3 = debugColors.content
-        self._tabBar.BackgroundColor3 = debugColors.tabbar
-        self._pageArea.BackgroundColor3 = debugColors.page
-        self._sticker.BackgroundColor3 = debugColors.sticker
+        for _, layer in ipairs(layers) do storeOriginalColor(layer) end
+        self._sidebar.BackgroundColor3 = Color3.fromRGB(120, 60, 170)
+        self._content.BackgroundColor3 = Color3.fromRGB(40, 170, 90)
+        self._tabBar.BackgroundColor3  = Color3.fromRGB(220, 140, 40)
+        self._pageArea.BackgroundColor3= Color3.fromRGB(30, 90, 200)
+        self._sticker.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     else
-        for _, layer in ipairs(layers) do
-            restoreOriginalColor(layer)
-        end
+        for _, layer in ipairs(layers) do restoreOriginalColor(layer) end
     end
 end
 
@@ -480,6 +471,13 @@ end
 ---------------------------------------------------------------------
 function Module.new(opts: NewOptions?): UIInstance
     return UI.new(opts)
+end
+
+-- Optional compatibility: allow Module.EnableDebug(ui, true)
+function Module.EnableDebug(selfOrUi, on: boolean)
+    if type(selfOrUi) == "table" and selfOrUi.EnableDebug then
+        return selfOrUi:EnableDebug(on)
+    end
 end
 
 -- Re-export helpers if desired (not required but convenient)
