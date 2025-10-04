@@ -284,7 +284,7 @@ function UI:setLayerAndLayout()
         local title = self._titleLabel or self._tabBar:FindFirstChild("Title")
         if title then
             title.Position = UDim2.new(0, 12, 0, 0)
-            title.Size = UDim2.new(0, 128, 0, 48)
+            title.Size = UDim2.new(0, 140, 0, 48) -- locked width for title region
             title.TextXAlignment = Enum.TextXAlignment.Left
         end
         local chipRow = self._tabBar:FindFirstChild("ChipRow")
@@ -763,7 +763,18 @@ function UI:Toggle(parent: Instance, args: {label: string, value: boolean?, onCh
     local val = (args and args.value) and true or false
     local btn = Instance.new("TextButton"); btn.Name="Switch"; btn.AutoButtonColor=false; btn.Text=""; btn.Size=UDim2.new(0,44,0,22); btn.Position=UDim2.new(1,-44,0.5,-11); btn.BackgroundColor3 = val and t.colors.accent or t.colors.surfaceAlt; btn.BorderSizePixel=0; btn.Parent=row
     local c = Instance.new("UICorner"); c.CornerRadius=UDim.new(1,0); c.Parent=btn
-    local knob = Instance.new("Frame"); knob.Name="Knob"; knob.Size=UDim2.new(0,18,0,18); knob.Position = UDim2.new(val and 1 or 0, val and -20 or 2, 0.5, -9); knob.BackgroundColor3=t.colors.text; knob.BorderSizePixel=0; knob.Parent=btn
+    local knob = Instance.new("Frame")
+    knob.Name = "Knob"
+    knob.Size = UDim2.new(0,18,0,18)
+    knob.Position = UDim2.new(val and 1 or 0, val and -20 or 2, 0.5, -9)
+    knob.BackgroundColor3 = t.colors.text
+    knob.BorderSizePixel = 0
+    knob.Parent = btn
+    local ks = Instance.new("UIStroke")
+    ks.Color = Color3.fromRGB(0,0,0)
+    ks.Transparency = 0.8
+    ks.Thickness = 1
+    ks.Parent = knob
     local ck = Instance.new("UICorner"); ck.CornerRadius=UDim.new(1,0); ck.Parent=knob
     btn.MouseButton1Click:Connect(function()
         val = not val
@@ -835,6 +846,7 @@ function UI.new(opts: NewOptions?): UIInstance
         ResetOnSpawn = false,
         IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        SelectionGroup = true, -- corral keyboard/gamepad focus inside window
         Parent = opts.Parent or game:GetService("CoreGui"),
     })
 
@@ -882,9 +894,9 @@ function UI.new(opts: NewOptions?): UIInstance
         c.Parent = f
         return f
     end
-    mkLayer("S1", 24, 0.90)
-    mkLayer("S2", 16, 0.93)
-    mkLayer("S3", 8, 0.96)
+    mkLayer("S1", 24, 0.92)
+    mkLayer("S2", 16, 0.94)
+    mkLayer("S3", 8, 0.965)
 
     -- Sticker (decor/branding / handle)
     local sticker = create("Frame", {
@@ -894,7 +906,7 @@ function UI.new(opts: NewOptions?): UIInstance
         Size = UDim2.new(0, 24, 0, 24),
         Position = UDim2.new(1, -36, 0, 12),
         Parent = window,
-        ZIndex = 3,
+        ZIndex = 2, -- behind chips/title
         Active = false,
     })
     applyCorner(sticker, theme.radii.sm)
@@ -912,6 +924,7 @@ function UI.new(opts: NewOptions?): UIInstance
         ZIndex = 3,
     })
     applyStroke(tabBar, theme.colors.stroke, 1, 0.25)
+    screen.SelectionParent = window
 
     -- Sidebar (left)
     local sidebar = create("Frame", {
@@ -932,6 +945,19 @@ function UI.new(opts: NewOptions?): UIInstance
         ZIndex = 2,
     })
     applyStroke(content, theme.colors.stroke, 1, 0.3)
+    local contentPad = Instance.new("UIPadding")
+    contentPad.PaddingRight = UDim.new(0, 1)
+    contentPad.Parent = content
+    -- subtle divider between sidebar and content
+    local split = Instance.new("Frame")
+    split.Name = "SidebarDivider"
+    split.BackgroundColor3 = theme.colors.stroke
+    split.BackgroundTransparency = 0.4
+    split.BorderSizePixel = 0
+    split.Size = UDim2.new(0, 1, 1, -48)
+    split.Position = UDim2.new(0, 240, 0, 48)
+    split.ZIndex = 3
+    split.Parent = window
 
     -- PageArea (scrolling)
     local pageArea = create("ScrollingFrame", {
@@ -939,7 +965,8 @@ function UI.new(opts: NewOptions?): UIInstance
         BackgroundColor3 = theme.colors.surface,
         BorderSizePixel = 0,
         Parent = content,
-        ScrollBarThickness = 8,
+        ScrollBarThickness = 6,
+        ScrollBarImageColor3 = theme.colors.stroke,
         VerticalScrollBarInset = Enum.ScrollBarInset.ScrollBar,
         ScrollingDirection = Enum.ScrollingDirection.Y,
         CanvasSize = UDim2.new(0,0,0,0),
@@ -954,6 +981,13 @@ function UI.new(opts: NewOptions?): UIInstance
     layout.SortOrder = Enum.SortOrder.LayoutOrder
     layout.Padding = UDim.new(0, theme.spacing[3]) -- e.g. 8
     layout.Parent = pageArea
+    -- inner breathing room for content
+    local pagePad = Instance.new("UIPadding")
+    pagePad.PaddingTop = UDim.new(0, 12)
+    pagePad.PaddingBottom = UDim.new(0, 12)
+    pagePad.PaddingLeft = UDim.new(0, 12)
+    pagePad.PaddingRight = UDim.new(0, 12)
+    pagePad.Parent = pageArea
 
     -- Title label inside TabBar (simple)
     local title = create("TextLabel", {
