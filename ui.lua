@@ -1216,53 +1216,67 @@ function Library:CreateTabBar(tabs)
 end
 
 function Library:SetActiveTab(id)
-  if not id then
-    return
-  end
-  if self._activeTab == id then
-    return
-  end
-  self._activeTab = id
-  for tabId, components in pairs(self._tabButtons) do
-    if components.Label then
-      if tabId == id then
-        components.Label.TextColor3 = self._theme.text
-        components.Underline.Visible = true
-      else
-        components.Label.TextColor3 = self._theme.textMuted
-        components.Underline.Visible = false
-      end
+    if not id then return end
+    id = tostring(id)
+    if self._activeTab == id then return end
+    self._activeTab = id
+
+    -- Update tab visuals
+    for tabId, components in pairs(self._tabButtons) do
+        local selected = (tostring(tabId) == id)
+        if components.Label then
+            components.Label.TextColor3 = selected and self._theme.text or self._theme.textMuted
+        end
+        if components.Underline then
+            components.Underline.Visible = selected
+        end
     end
-  end
-  for pageId, page in pairs(self._pages) do
-    page.Visible = (pageId == id)
-  end
-  self._signals.TabSelected:Fire(id)
-  self:_markDirty()
+
+    -- Find target page by name and toggle all pages under PageArea
+    local targetName = "Page_" .. id
+    local target = self._pages[id] or self.PageArea:FindFirstChild(targetName)
+
+    for _, child in ipairs(self.PageArea:GetChildren()) do
+        if child:IsA("GuiObject") and child.Name:match("^Page_") then
+            child.Visible = (child == target)
+        end
+    end
+
+    -- reset scroll to top if it's a ScrollingFrame
+    if self.PageArea:IsA("ScrollingFrame") then
+        self.PageArea.CanvasPosition = Vector2.new(0, 0)
+    end
+
+    self._signals.TabSelected:Fire(id)
+    self:_markDirty()
 end
 
 --// Page & Layout Helpers --------------------------------------------------
 
 function Library:CreatePage(id)
-  local page = create("Frame", {
-    Name = "Page_" .. id,
-    BackgroundTransparency = 1,
-    AutomaticSize = Enum.AutomaticSize.Y,
-    Size = UDim2.new(1, 0, 0, 0),
-    Visible = false,
-    LayoutOrder = #self._pages + 1,
-  })
-  page.Parent = self.PageArea
-  local layout = Instance.new("UIListLayout")
-  layout.FillDirection = Enum.FillDirection.Vertical
-  layout.Padding = UDim.new(0, 16)
-  layout.SortOrder = Enum.SortOrder.LayoutOrder
-  layout.Parent = page
-  self._pages[id] = page
-  if not self._activeTab then
-    self:SetActiveTab(id)
-  end
-  return page
+    id = tostring(id)
+    local page = create("Frame", {
+        Name = "Page_" .. id,
+        BackgroundTransparency = 1,
+        AutomaticSize = Enum.AutomaticSize.Y,
+        Size = UDim2.new(1, 0, 0, 0),
+        Visible = false,
+        LayoutOrder = (#self._pages) + 1,
+    })
+    page.Parent = self.PageArea
+
+    local layout = Instance.new("UIListLayout")
+    layout.FillDirection = Enum.FillDirection.Vertical
+    layout.Padding = UDim.new(0, 16)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = page
+
+    self._pages[id] = page
+
+    if not self._activeTab then
+        self:SetActiveTab(id)
+    end
+    return page
 end
 
 function Library:Stack(parent, opts)
