@@ -1004,99 +1004,106 @@ function Library:CreateSidebar(items, opts)
   opts = opts or {}
   self._sidebarItems = items or {}
   if not self._sidebarVirtualizer then
-    self._sidebarVirtualizer = VirtualList.new(self.SidebarScroll, 44, function(holder, item)
-      if not holder._built then
-        holder._built = true
+    -- before creating the VirtualList in CreateSidebar, ensure the side table exists
+    self._sidebarCellMaids = self._sidebarCellMaids or setmetatable({}, { __mode = "k" })
+
+    self._sidebarVirtualizer = VirtualList.new(self.SidebarScroll, 44, function(holder, item, _, force)
+    -- first-time build for this recycled slot
+    if not holder:GetAttribute("built") then
+        holder:SetAttribute("built", true)
         holder.BackgroundTransparency = 1
+
         local button = create("TextButton", {
-          BackgroundTransparency = 1,
-          BorderSizePixel = 0,
-          Size = UDim2.new(1, 0, 1, 0),
-          AutoButtonColor = false,
-          Text = "",
-        })
-        button.Parent = holder
-        holder.Button = button
+        Name = "Button",
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Size = UDim2.new(1, 0, 1, 0),
+        AutoButtonColor = false,
+        Text = "",
+        }); button.Parent = holder
+
         local icon = create("TextLabel", {
-          BackgroundTransparency = 1,
-          Font = Enum.Font.GothamSemibold,
-          TextSize = 16,
-          TextColor3 = self._theme.textMuted,
-          Text = "-",
-          Size = UDim2.new(0, 32, 0, 32),
-          Position = UDim2.new(0, 8, 0.5, -16),
-        })
-        icon.Parent = button
-        holder.Icon = icon
+        Name = "Icon",
+        BackgroundTransparency = 1,
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 16,
+        TextColor3 = self._theme.textMuted,
+        Text = "-",
+        Size = UDim2.new(0, 32, 0, 32),
+        Position = UDim2.new(0, 8, 0.5, -16),
+        }); icon.Parent = button
+
         local label = create("TextLabel", {
-          BackgroundTransparency = 1,
-          Font = Enum.Font.Gotham,
-          TextSize = 14,
-          TextXAlignment = Enum.TextXAlignment.Left,
-          TextYAlignment = Enum.TextYAlignment.Center,
-          Text = "Item",
-          TextColor3 = self._theme.text,
-          Size = UDim2.new(1, -48, 1, 0),
-          Position = UDim2.new(0, 48, 0, 0),
-        })
-        label.Parent = button
-        holder.Label = label
+        Name = "Label",
+        BackgroundTransparency = 1,
+        Font = Enum.Font.Gotham,
+        TextSize = 14,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Text = "Item",
+        TextColor3 = self._theme.text,
+        Size = UDim2.new(1, -48, 1, 0),
+        Position = UDim2.new(0, 48, 0, 0),
+        }); label.Parent = button
+
         local indicator = create("Frame", {
-          BackgroundColor3 = self._theme.accent,
-          Size = UDim2.new(0, 3, 0, 24),
-          Position = UDim2.new(0, 2, 0.5, -12),
-          Visible = false,
-        })
-        applyCornerRadius(indicator, 4)
-        indicator.Parent = button
-        holder.Indicator = indicator
-        holder.SignalMaid = Maid.new()
-      end
-      local button = holder.Button
-      local label = holder.Label
-      local icon = holder.Icon
-      local indicator = holder.Indicator
-      holder.ItemId = item.id
-      holder.IsGroup = item.group == true
-      label.Text = item.label or item.id or ("Item " .. tostring(item))
-      label.TextSize = holder.IsGroup and 12 or 14
-      label.Font = holder.IsGroup and Enum.Font.GothamSemibold or Enum.Font.Gotham
-      icon.Text = item.icon or (holder.IsGroup and "" or "-")
-      holder.SignalMaid:DoCleaning()
-      if holder.IsGroup then
-        icon.Visible = false
-        button.Active = false
-        button.Selectable = false
+        Name = "Indicator",
+        BackgroundColor3 = self._theme.accent,
+        Size = UDim2.new(0, 3, 0, 24),
+        Position = UDim2.new(0, 2, 0.5, -12),
+        Visible = false,
+        }); applyCornerRadius(indicator, 4); indicator.Parent = button
+    end
+
+    -- look up children by name (no custom fields on Instances)
+    local button    = holder:FindFirstChild("Button")
+    local icon      = holder:FindFirstChild("Icon")
+    local label     = holder:FindFirstChild("Label")
+    local indicator = holder:FindFirstChild("Indicator")
+
+    -- per-holder maid from weak table
+    local cellMaid = self._sidebarCellMaids[holder]
+    if not cellMaid then
+        cellMaid = Maid.new()
+        self._sidebarCellMaids[holder] = cellMaid
+    else
+        cellMaid:DoCleaning()
+    end
+
+    -- render/update
+    local isGroup = item.group == true
+    label.Text = item.label or item.id or ("Item " .. tostring(item))
+    label.TextSize = isGroup and 12 or 14
+    label.Font = isGroup and Enum.Font.GothamSemibold or Enum.Font.Gotham
+    icon.Text = item.icon or (isGroup and "" or "-")
+
+    if isGroup then
+        icon.Visible, button.Active, button.Selectable, indicator.Visible = false, false, false, false
         label.TextColor3 = self._theme.textMuted
-        indicator.Visible = false
-      else
+    else
         icon.Visible = true
-        button.Active = true
-        button.Selectable = true
-        label.TextColor3 = self._activeNavId == item.id and self._theme.text or self._theme.text
-        icon.TextColor3 = self._activeNavId == item.id and self._theme.accent or self._theme.textMuted
-        indicator.Visible = self._activeNavId == item.id
-        if not holder._focusApplied then
-          applyFocusStyling(button, self._theme, self._maid)
-          holder._focusApplied = true
+        button.Active, button.Selectable = true, true
+        local selected = (self._activeNavId == item.id)
+        label.TextColor3 = selected and self._theme.text or self._theme.text
+        icon.TextColor3  = selected and self._theme.accent or self._theme.textMuted
+        indicator.Visible = selected
+
+        if force then
+        applyFocusStyling(button, self._theme, self._maid)
         end
-        holder.SignalMaid:GiveTask(button.MouseButton1Click:Connect(function()
-          if holder.ItemId then
-            self:_setActiveNav(holder.ItemId)
-          end
+
+        cellMaid:GiveTask(button.MouseButton1Click:Connect(function()
+        self:_setActiveNav(item.id)
         end))
-        holder.SignalMaid:GiveTask(button.MouseEnter:Connect(function()
-          TweenService:Create(icon, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextColor3 = self._theme.text }):Play()
+        cellMaid:GiveTask(button.MouseEnter:Connect(function()
+        TweenService:Create(icon, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextColor3 = self._theme.text }):Play()
         end))
-        holder.SignalMaid:GiveTask(button.MouseLeave:Connect(function()
-          if self._activeNavId ~= holder.ItemId then
+        cellMaid:GiveTask(button.MouseLeave:Connect(function()
+        if self._activeNavId ~= item.id then
             TweenService:Create(icon, TweenInfo.new(0.12, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { TextColor3 = self._theme.textMuted }):Play()
-          end
+        end
         end))
-      end
-      label.TextColor3 = holder.IsGroup and self._theme.textMuted or (self._activeNavId == item.id and self._theme.text or self._theme.textMuted)
-      icon.TextColor3 = (self._activeNavId == item.id) and self._theme.accent or self._theme.textMuted
-      indicator.Visible = (not holder.IsGroup) and self._activeNavId == item.id
+    end
     end)
   end
   self._sidebarVirtualizer:SetItems(self._sidebarItems)
