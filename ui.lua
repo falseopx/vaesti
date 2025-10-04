@@ -256,6 +256,10 @@ export type UIInstance = {
     _rebuildTabBarForSection: (self: UIInstance, sectionId: string) -> (),
     SetActiveSection: (self: UIInstance, sectionId: string) -> (),
     SetActiveTab: (self: UIInstance, tabId: string) -> (),
+    Card: (self: UIInstance, parent: Instance, spec: {title: string, description: string?}) -> Frame,
+    Toggle: (self: UIInstance, parent: Instance, args: {label: string, value: boolean?, onChanged: (boolean)->()?}) -> Frame,
+    ColorSwatch: (self: UIInstance, parent: Instance, args: {label: string, value: Color3?, onChanged: (Color3)->()?}) -> Frame,
+    SetTheme: (self: UIInstance, overrides: {[string]: any}) -> (),
     Destroy: (self: UIInstance) -> (),
 }
 
@@ -523,6 +527,102 @@ function UI:SetActiveTab(tabId: string)
 end
 
 ---------------------------------------------------------------------
+-- Instance Theme Setter (proxy to Module.SetTheme)
+---------------------------------------------------------------------
+function UI:SetTheme(overrides: {[string]: any})
+    if type(overrides) ~= "table" then return end
+    local updated = Module.SetTheme(overrides)
+    self._theme = updated
+    -- minimal live accent update for existing tab underline / toggles
+    for _, comp in pairs(self._tabButtons or {}) do
+        if comp.Underline then comp.Underline.BackgroundColor3 = self._theme.colors.accent end
+    end
+end
+
+---------------------------------------------------------------------
+-- Components
+---------------------------------------------------------------------
+function UI:Card(parent: Instance, spec: {title: string, description: string?}): Frame
+    local t = self._theme
+    local card = Instance.new("Frame")
+    card.Name = "Card"
+    card.BackgroundColor3 = t.colors.surface
+    card.BorderSizePixel = 0
+    card.AutomaticSize = Enum.AutomaticSize.Y
+    card.Size = UDim2.new(1, -16, 0, 0)
+    card.Parent = parent
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, t.radii.md); corner.Parent = card
+    local stroke = Instance.new("UIStroke"); stroke.Color = t.colors.stroke; stroke.Thickness = 1; stroke.Transparency = 0.2; stroke.Parent = card
+    local pad = Instance.new("UIPadding"); pad.PaddingTop = UDim.new(0, 16); pad.PaddingBottom = UDim.new(0, 16); pad.PaddingLeft = UDim.new(0, 16); pad.PaddingRight = UDim.new(0, 16); pad.Parent = card
+    local layout = Instance.new("UIListLayout"); layout.SortOrder = Enum.SortOrder.LayoutOrder; layout.Padding = UDim.new(0, 8); layout.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"; title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamSemibold; title.TextSize = 18
+    title.TextColor3 = t.colors.text; title.TextXAlignment = Enum.TextXAlignment.Left
+    title.Text = (spec and spec.title) or "Card"; title.Size = UDim2.new(1,0,0,22); title.Parent = card
+
+    if spec and spec.description then
+        local sub = Instance.new("TextLabel")
+        sub.Name = "Description"; sub.BackgroundTransparency = 1
+        sub.Font = Enum.Font.Gotham; sub.TextSize = 14
+        sub.TextColor3 = t.colors.textMuted; sub.TextXAlignment = Enum.TextXAlignment.Left
+        sub.TextWrapped = true; sub.Size = UDim2.new(1,0,0,18)
+        sub.Text = spec.description; sub.Parent = card
+    end
+
+    local body = Instance.new("Frame")
+    body.Name = "Body"
+    body.BackgroundTransparency = 1
+    body.AutomaticSize = Enum.AutomaticSize.Y
+    body.Size = UDim2.new(1,0,0,0)
+    local bodyLayout = Instance.new("UIListLayout"); bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder; bodyLayout.Padding = UDim.new(0, 8); bodyLayout.Parent = body
+    body.Parent = card
+    return body
+end
+
+function UI:Toggle(parent: Instance, args: {label: string, value: boolean?, onChanged: (boolean)->()?}): Frame
+    local t = self._theme
+    local row = Instance.new("Frame"); row.Name="Toggle"; row.BackgroundTransparency=1; row.Size = UDim2.new(1,0,0,28); row.Parent = parent
+    local label = Instance.new("TextLabel"); label.BackgroundTransparency=1; label.Font=Enum.Font.Gotham; label.TextSize=14; label.TextColor3=t.colors.text; label.TextXAlignment=Enum.TextXAlignment.Left; label.Text=(args and args.label) or "Toggle"; label.Size=UDim2.new(1,-72,1,0); label.Parent=row
+    local val = (args and args.value) and true or false
+    local btn = Instance.new("TextButton"); btn.Name="Switch"; btn.AutoButtonColor=false; btn.Text=""; btn.Size=UDim2.new(0,44,0,22); btn.Position=UDim2.new(1,-44,0.5,-11); btn.BackgroundColor3 = val and t.colors.accent or t.colors.surfaceAlt; btn.BorderSizePixel=0; btn.Parent=row
+    local c = Instance.new("UICorner"); c.CornerRadius=UDim.new(1,0); c.Parent=btn
+    local knob = Instance.new("Frame"); knob.Name="Knob"; knob.Size=UDim2.new(0,18,0,18); knob.Position = UDim2.new(val and 1 or 0, val and -20 or 2, 0.5, -9); knob.BackgroundColor3=t.colors.text; knob.BorderSizePixel=0; knob.Parent=btn
+    local ck = Instance.new("UICorner"); ck.CornerRadius=UDim.new(1,0); ck.Parent=knob
+    btn.MouseButton1Click:Connect(function()
+        val = not val
+        btn.BackgroundColor3 = val and t.colors.accent or t.colors.surfaceAlt
+        knob.Position = UDim2.new(val and 1 or 0, val and -20 or 2, 0.5, -9)
+        if args and args.onChanged then args.onChanged(val) end
+    end)
+    return row
+end
+
+function UI:ColorSwatch(parent: Instance, args: {label: string, value: Color3?, onChanged: (Color3)->()?}): Frame
+    local t = self._theme
+    local row = Instance.new("Frame"); row.Name="ColorSwatch"; row.BackgroundTransparency=1; row.Size = UDim2.new(1,0,0,28); row.Parent = parent
+    local label = Instance.new("TextLabel"); label.BackgroundTransparency=1; label.Font=Enum.Font.Gotham; label.TextSize=14; label.TextColor3=t.colors.text; label.TextXAlignment=Enum.TextXAlignment.Left; label.Text=(args and args.label) or "Color"; label.Size=UDim2.new(1,-48,1,0); label.Parent=row
+    local btn = Instance.new("TextButton"); btn.Name="Swatch"; btn.AutoButtonColor=false; btn.Text=""; btn.Size=UDim2.new(0,22,0,22); btn.Position=UDim2.new(1,-22,0.5,-11); btn.BackgroundColor3 = (args and args.value) or t.colors.accent; btn.BorderSizePixel=0; btn.Parent=row
+    local c = Instance.new("UICorner"); c.CornerRadius=UDim.new(1,0); c.Parent=btn
+    local presets = {
+        Color3.fromRGB(164,106,255),
+        Color3.fromRGB(92,190,255),
+        Color3.fromRGB(255,142,94),
+        Color3.fromRGB(120,220,140),
+        Color3.fromRGB(255,204,0),
+    }
+    local i = 1
+    btn.MouseButton1Click:Connect(function()
+        i = (i % #presets) + 1
+        local color = presets[i]
+        btn.BackgroundColor3 = color
+        if args and args.onChanged then args.onChanged(color) end
+    end)
+    return row
+end
+
+---------------------------------------------------------------------
 -- Constructor
 ---------------------------------------------------------------------
 type NewOptions = {
@@ -693,6 +793,19 @@ function UI.new(opts: NewOptions?): UIInstance
     local pageBilling = self:CreatePage("settings", "billing")
     self._demoPages = { account = pageAccount, appearance = pageAppearance, billing = pageBilling }
     self:SetActiveSection("settings")
+
+    -- Populate demo appearance page
+    local p = self._demoPages and self._demoPages.appearance
+    if p then
+        local card1 = self:Card(p, { title = "Brand color", description = "Select or customize your brand color." })
+        self:ColorSwatch(card1, { label = "Brand color", value = self._theme.colors.accent, onChanged = function(c)
+            self:SetTheme({ colors = { accent = c } })
+        end })
+        local card2 = self:Card(p, { title = "Dashboard charts", description = "How charts are displayed." })
+        self:Toggle(card2, { label = "Use simplified charts", value = false, onChanged = function(v)
+            print("simplified:", v)
+        end })
+    end
 
     -- Cleanup handle
     function self:Destroy()
