@@ -250,6 +250,8 @@ export type UIInstance = {
     _tabButtons: {[string]: any},
     _sidebarButtons: {[string]: TextButton},
     _sidebarRows: {[string]: {Row: GuiButton, Label: TextLabel, Accent: Frame}},
+    _softShadowRoot: Frame?,
+    _shadowRoot: Frame?,
     setLayerAndLayout: (self: UIInstance) -> (),
     EnableDebug: (self: UIInstance, on: boolean) -> (),
     CreateSection: (self: UIInstance, sectionId: string, def: {tabs: {{id: string, label: string}}?, defaultTab: string?}?) -> (),
@@ -263,6 +265,7 @@ export type UIInstance = {
     SetTheme: (self: UIInstance, overrides: {[string]: any}) -> (),
     _updateSidebarVisuals: (self: UIInstance) -> (),
     _syncShadow: (self: UIInstance) -> (),
+    CenterWindow: (self: UIInstance) -> (),
     Destroy: (self: UIInstance) -> (),
 }
 
@@ -273,21 +276,58 @@ UI.__index = UI
 -- Layout Application
 ---------------------------------------------------------------------
 function UI:setLayerAndLayout()
-    -- TabBar
-    self._tabBar.Size = UDim2.new(1, 0, 0, 48)
-    self._tabBar.Position = UDim2.new(0, 0, 0, 0)
+    if not self._window then return end
 
-    -- Sidebar
-    self._sidebar.Size = UDim2.new(0, 240, 1, -48)
-    self._sidebar.Position = UDim2.new(0, 0, 0, 48)
+    if self._tabBar then
+        self._tabBar.Size = UDim2.new(1, 0, 0, 48)
+        self._tabBar.Position = UDim2.new(0, 0, 0, 0)
+        local title = self._titleLabel or self._tabBar:FindFirstChild("Title")
+        if title then
+            title.Position = UDim2.new(0, 12, 0, 0)
+            title.Size = UDim2.new(0, 128, 0, 48)
+            title.TextXAlignment = Enum.TextXAlignment.Left
+        end
+        local chipRow = self._tabBar:FindFirstChild("ChipRow")
+        if chipRow then
+            chipRow.Position = UDim2.new(0, 140, 0, 6) -- starts after title + padding
+            chipRow.Size = UDim2.new(1, -160, 0, 36) -- right padding to avoid sticker / edge
+        end
+        local divider = self._tabBar:FindFirstChild("Divider")
+        if not divider then
+            divider = Instance.new("Frame")
+            divider.Name = "Divider"
+            divider.BorderSizePixel = 0
+            divider.BackgroundColor3 = self._theme.colors.stroke
+            divider.BackgroundTransparency = 0.5
+            divider.Parent = self._tabBar
+        end
+        divider.Size = UDim2.new(1, 0, 0, 1)
+        divider.Position = UDim2.new(0, 0, 1, 0)
+        divider.ZIndex = 3
+    end
 
-    -- Content
-    self._content.Size = UDim2.new(1, -240, 1, -48)
-    self._content.Position = UDim2.new(0, 240, 0, 48)
+    if self._sidebar then
+        self._sidebar.Size = UDim2.new(0, 240, 1, -48)
+        self._sidebar.Position = UDim2.new(0, 0, 0, 48)
+    end
 
-    -- PageArea fills Content
-    self._pageArea.Size = UDim2.new(1, 0, 1, 0)
-    self._pageArea.Position = UDim2.new(0, 0, 0, 0)
+    if self._content then
+        self._content.Size = UDim2.new(1, -240, 1, -48)
+        self._content.Position = UDim2.new(0, 240, 0, 48)
+    end
+
+    if self._pageArea then
+        self._pageArea.Size = UDim2.new(1, 0, 1, 0)
+        self._pageArea.Position = UDim2.new(0, 0, 0, 0)
+    end
+
+    if self._sticker then
+        self._sticker.Size = UDim2.new(0, 24, 0, 24)
+        self._sticker.Position = UDim2.new(1, -36, 0, 12) -- inside window
+        self._sticker.ZIndex = 3
+    end
+
+    self:_syncShadow()
 end
 
 ---------------------------------------------------------------------
@@ -622,22 +662,38 @@ function UI:_updateSidebarVisuals()
     end
 end
 
--- Shadow sync helper
+-- Shadow sync helper (positions shadow layers to follow window without input interception)
 function UI:_syncShadow()
-    if not self._softShadowRoot or not self._window then return end
+    local root = self._shadowRoot or self._softShadowRoot
+    if not root or not self._window then return end
     local win = self._window
-    local root = self._softShadowRoot
-    root.Position = win.Position + UDim2.new(0,-20,0,-20)
-    root.Size = win.Size + UDim2.new(0,40,0,40)
-    local radii = self._theme.radii.lg
-    local layers = { S1 = 24, S2 = 16, S3 = 8 }
-    for name, offset in pairs(layers) do
-        local layer = root:FindFirstChild(name) :: Frame
-        if layer then
-            layer.Position = UDim2.new(0, offset, 0, offset)
-            layer.Size = win.Size + UDim2.new(0, offset * -2, 0, offset * -2)
+    root.AnchorPoint = win.AnchorPoint
+    root.Position = win.Position
+    root.Size = win.Size
+    -- Recenter layers with padded sizes
+    local pads = { S1 = 24, S2 = 16, S3 = 8 }
+    for name, pad in pairs(pads) do
+        local layer = root:FindFirstChild(name)
+        if layer and layer:IsA("Frame") then
+            layer.AnchorPoint = Vector2.new(0.5,0.5)
+            layer.Position = UDim2.new(0.5,0,0.5,0)
+            layer.Size = win.Size + UDim2.new(0, pad*2, 0, pad*2)
+            layer.Active = false
         end
     end
+end
+
+-- Responsive centering helper
+function UI:CenterWindow()
+    if not self._window then return end
+    local camera = workspace.CurrentCamera
+    local vp = camera and camera.ViewportSize or Vector2.new(1280, 720)
+    local w = math.clamp(math.floor(vp.X * 0.72), 840, 1100)
+    local h = math.clamp(math.floor(vp.Y * 0.68), 520, 720)
+    self._window.Size = UDim2.new(0, w, 0, h)
+    self._window.Position = UDim2.new(0.5, 0, 0.5, 0)
+    self._window.AnchorPoint = Vector2.new(0.5, 0.5)
+    self:setLayerAndLayout()
 end
 
 ---------------------------------------------------------------------
@@ -751,6 +807,7 @@ type NewOptions = {
     Theme: string | {[string]: any}?,
     WindowSize: UDim2?,
     WindowPosition: UDim2?,
+    HideSticker: boolean?,
 }
 
 function UI.new(opts: NewOptions?): UIInstance
@@ -776,7 +833,7 @@ function UI.new(opts: NewOptions?): UIInstance
     local screen = create("ScreenGui", {
         Name = opts.Name or "VaestiUI",
         ResetOnSpawn = false,
-        IgnoreGuiInset = false,
+        IgnoreGuiInset = true,
         ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
         Parent = opts.Parent or game:GetService("CoreGui"),
     })
@@ -801,6 +858,10 @@ function UI.new(opts: NewOptions?): UIInstance
     softRoot.BackgroundTransparency = 1
     softRoot.Active = false
     softRoot.ZIndex = 0
+    softRoot.AnchorPoint = Vector2.new(0.5, 0.5)
+    softRoot.Position = window.Position
+    softRoot.Size = window.Size
+    softRoot.ClipsDescendants = false
     softRoot.Parent = screen
     local function mkLayer(name, offset, transparency)
         local f = Instance.new("Frame")
@@ -808,6 +869,13 @@ function UI.new(opts: NewOptions?): UIInstance
         f.BackgroundColor3 = Color3.new(0,0,0)
         f.BackgroundTransparency = transparency
         f.BorderSizePixel = 0
+        f.AnchorPoint = Vector2.new(0.5, 0.5)
+        f.Position = UDim2.new(0.5, 0, 0.5, offset)
+        f.Size = window.Size + UDim2.new(0, offset * 2, 0, offset * 2)
+        f.Active = false
+        f.ZIndex = 0
+        f.ClipsDescendants = false
+        f:SetAttribute("Offset", offset)
         f.Parent = softRoot
         local c = Instance.new("UICorner")
         c.CornerRadius = UDim.new(0, theme.radii.lg)
@@ -823,14 +891,17 @@ function UI.new(opts: NewOptions?): UIInstance
         Name = "Sticker",
         BackgroundColor3 = theme.colors.surfaceAlt,
         BorderSizePixel = 0,
-        Size = UDim2.new(0, 48, 0, 48),
-        Position = UDim2.new(0, -8, 0, -8),
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(1, -36, 0, 12),
         Parent = window,
-        ZIndex = 0,
+        ZIndex = 3,
         Active = false,
     })
     applyCorner(sticker, theme.radii.sm)
     applyStroke(sticker, theme.colors.stroke, 1, 0.4)
+    if opts.HideSticker then
+        sticker.Visible = false
+    end
 
     -- TabBar (top)
     local tabBar = create("Frame", {
@@ -918,10 +989,13 @@ function UI.new(opts: NewOptions?): UIInstance
         _sidebarButtons = {},
         _sidebarRows = {},
         _softShadowRoot = softRoot,
+        _shadowRoot = softRoot,
+        _titleLabel = title,
+        _viewportConn = nil,
     }, UI)
 
-    self:setLayerAndLayout()
-    self:_syncShadow()
+    -- Initial responsive center (overrides provided explicit size/pos for consistency)
+    self:CenterWindow()
 
     -- Demo autobuild (initial section and pages)
     self:CreateSection("settings", {
@@ -954,6 +1028,22 @@ function UI.new(opts: NewOptions?): UIInstance
     -- Cleanup handle
     function self:Destroy()
         self._maid:Destroy()
+    end
+
+    -- Viewport / camera resize listeners for recentering
+    workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        task.defer(function()
+            if workspace.CurrentCamera then
+                workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+                    self:CenterWindow()
+                end)
+            end
+        end)
+    end)
+    if workspace.CurrentCamera then
+        workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+            self:CenterWindow()
+        end)
     end
 
     return self
