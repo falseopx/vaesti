@@ -740,11 +740,17 @@ function Library.new(opts)
   tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
   tabLayout.Parent = tabBarHolder
 
-  local pageArea = create("Frame", {
+  local pageArea = create("ScrollingFrame", {
     Name = "PageArea",
     BackgroundTransparency = 1,
     Position = UDim2.new(0, SIDEBAR_W, 0, TAB_H),
     Size = UDim2.new(1, -SIDEBAR_W, 1, -TAB_H),
+    ScrollingEnabled = true,
+    Active = true,
+    ScrollingDirection = Enum.ScrollingDirection.Y,
+    AutomaticCanvasSize = Enum.AutomaticSize.Y,
+    ScrollBarThickness = 8,
+    CanvasSize = UDim2.new(),
     ZIndex = 2,
   })
   pageArea.Parent = main
@@ -758,7 +764,6 @@ function Library.new(opts)
   pageStack.Padding = UDim.new(0, 24)
   pageStack.SortOrder = Enum.SortOrder.LayoutOrder
   pageStack.Parent = pageArea
-
   self:_bindTheme(sidebar, { BackgroundColor3 = "panel" })
   self:_bindTheme(content, { BackgroundColor3 = "card" })
   self:_bindTheme(main, { BackgroundColor3 = "panel" })
@@ -1220,41 +1225,27 @@ function Library:CreateTabBar(tabs)
 end
 
 function Library:SetActiveTab(id)
-    if not id then return end
-    id = tostring(id)
-    if self._activeTab == id then return end
-    self._activeTab = id
-
-    -- Update tab visuals
-    for tabId, components in pairs(self._tabButtons) do
-        local selected = (tostring(tabId) == id)
-        if components.Label then
-            components.Label.TextColor3 = selected and self._theme.text or self._theme.textMuted
-        end
-        if components.Underline then
-            components.Underline.Visible = selected
-        end
+  if not id then return end
+  id = tostring(id)
+  if self._activeTab == id then return end
+  self._activeTab = id
+  for tabId, comp in pairs(self._tabButtons) do
+    local selected = tostring(tabId) == id
+    if comp.Label     then comp.Label.TextColor3 = selected and self._theme.text or self._theme.textMuted end
+    if comp.Underline then comp.Underline.Visible = selected end
+  end
+  local targetName = "Page_" .. id
+  for _, child in ipairs(self.PageArea:GetChildren()) do
+    if child:IsA("GuiObject") and child.Name:match("^Page_") then
+      child.Visible = (child.Name == targetName)
     end
-
-    -- Find target page by name and toggle all pages under PageArea
-    local targetName = "Page_" .. id
-    local target = self._pages[id] or self.PageArea:FindFirstChild(targetName)
-
-    for _, child in ipairs(self.PageArea:GetChildren()) do
-        if child:IsA("GuiObject") and child.Name:match("^Page_") then
-            child.Visible = (child == target)
-        end
-    end
-
-    -- reset scroll to top if it's a ScrollingFrame
-    if self.PageArea:IsA("ScrollingFrame") then
-        self.PageArea.CanvasPosition = Vector2.new(0, 0)
-    end
-
-    self._signals.TabSelected:Fire(id)
-    self:_markDirty()
+  end
+  if self.PageArea:IsA("ScrollingFrame") then
+    self.PageArea.CanvasPosition = Vector2.new(0,0)
+  end
+  self._signals.TabSelected:Fire(id)
+  self:_markDirty()
 end
-
 --// Page & Layout Helpers --------------------------------------------------
 
 function Library:CreatePage(id)
@@ -2177,6 +2168,7 @@ function Library:_buildAppearanceSample(targetPage)
       value = self._theme.accent,
       tooltip = "Click to randomize or enter a hex value.",
       onChanged = function(color)
+        self:SetTheme({ accent = color })
         self:Notify("Brand color updated to " .. colorToHex(color), "info", { duration = 2 })
       end,
     })
