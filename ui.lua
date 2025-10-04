@@ -924,7 +924,7 @@ function UI.new(opts: NewOptions?): UIInstance
         ZIndex = 3,
     })
     applyStroke(tabBar, theme.colors.stroke, 1, 0.25)
-    screen.SelectionParent = window
+    -- Removed invalid ScreenGui.SelectionParent assignment (not a valid property)
 
     -- Sidebar (left)
     local sidebar = create("Frame", {
