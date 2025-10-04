@@ -249,6 +249,7 @@ export type UIInstance = {
     _activeTabs: {[string]: string},
     _tabButtons: {[string]: any},
     _sidebarButtons: {[string]: TextButton},
+    _sidebarRows: {[string]: {Row: GuiButton, Label: TextLabel, Accent: Frame}},
     setLayerAndLayout: (self: UIInstance) -> (),
     EnableDebug: (self: UIInstance, on: boolean) -> (),
     CreateSection: (self: UIInstance, sectionId: string, def: {tabs: {{id: string, label: string}}?, defaultTab: string?}?) -> (),
@@ -260,6 +261,8 @@ export type UIInstance = {
     Toggle: (self: UIInstance, parent: Instance, args: {label: string, value: boolean?, onChanged: (boolean)->()?}) -> Frame,
     ColorSwatch: (self: UIInstance, parent: Instance, args: {label: string, value: Color3?, onChanged: (Color3)->()?}) -> Frame,
     SetTheme: (self: UIInstance, overrides: {[string]: any}) -> (),
+    _updateSidebarVisuals: (self: UIInstance) -> (),
+    _syncShadow: (self: UIInstance) -> (),
     Destroy: (self: UIInstance) -> (),
 }
 
@@ -348,51 +351,55 @@ function UI:CreateSection(sectionId: string, def: {tabs: {{id: string, label: st
         container = container,
     }
 
-    -- Sidebar button styled
+    -- Sidebar row styled (chip-like)
     self._sidebarButtons = self._sidebarButtons or {}
-    local btn = Instance.new("TextButton")
-    btn.Name = "SectionButton_" .. sectionId
-    btn.Text = sectionId
-    btn.Font = Enum.Font.Gotham
-    btn.TextSize = 14
-    btn.TextColor3 = self._theme.colors.textMuted
-    btn.AutoButtonColor = false
-    btn.BackgroundColor3 = self._theme.colors.surface
-    btn.BackgroundTransparency = 1
-    btn.BorderSizePixel = 0
-    btn.Size = UDim2.new(1, -8, 0, 32)
-    btn.Position = UDim2.new(0,4,0,0)
-    btn.Parent = self._sidebar
-    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, self._theme.radii.xs); corner.Parent = btn
-    local pad = Instance.new("UIPadding"); pad.PaddingLeft = UDim.new(0,12); pad.PaddingRight = UDim.new(0,12); pad.Parent = btn
+    self._sidebarRows = self._sidebarRows or {}
+    local t = self._theme
+    local row = Instance.new("TextButton")
+    row.Name = "SectionButton_" .. sectionId
+    row.Text = sectionId
+    row.Font = Enum.Font.Gotham
+    row.TextSize = 14
+    row.TextColor3 = t.colors.textMuted
+    row.AutoButtonColor = false
+    row.BackgroundColor3 = t.colors.surface
+    row.BackgroundTransparency = 0
+    row.BorderSizePixel = 0
+    row.Size = UDim2.new(1, -8, 0, 32)
+    row.Position = UDim2.new(0,4,0,0)
+    row.Parent = self._sidebar
+    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, t.radii.xs); corner.Parent = row
+    local pad = Instance.new("UIPadding"); pad.PaddingLeft = UDim.new(0,12); pad.PaddingRight = UDim.new(0,12); pad.Parent = row
     local accentBar = Instance.new("Frame")
     accentBar.Name = "Accent"
-    accentBar.BackgroundColor3 = self._theme.colors.accent
+    accentBar.BackgroundColor3 = t.colors.accent
     accentBar.BorderSizePixel = 0
     accentBar.Size = UDim2.new(0,2,1,0)
     accentBar.Position = UDim2.new(0,0,0,0)
     accentBar.Visible = false
-    accentBar.Parent = btn
-    self:_applyFocusRing(btn)
+    accentBar.Parent = row
+    self:_applyFocusRing(row)
     local TweenService = game:GetService("TweenService")
-    local hoverInfo = TweenInfo.new(self._theme.tween.hover.time, self._theme.tween.hover.style, self._theme.tween.hover.direction)
-    btn.MouseEnter:Connect(function()
-        if not accentBar.Visible then
-            TweenService:Create(btn, hoverInfo, { BackgroundTransparency = 0 }):Play()
-            TweenService:Create(btn, hoverInfo, { BackgroundColor3 = self._theme.colors.surfaceAlt }):Play()
+    local hoverInfo = TweenInfo.new(t.tween.hover.time, t.tween.hover.style, t.tween.hover.direction)
+    row.MouseEnter:Connect(function()
+        if self._activeSectionId ~= sectionId then
+            TweenService:Create(row, hoverInfo, { BackgroundColor3 = t.colors.surfaceAlt }):Play()
         end
     end)
-    btn.MouseLeave:Connect(function()
-        if not accentBar.Visible then
-            TweenService:Create(btn, hoverInfo, { BackgroundTransparency = 1 }):Play()
+    row.MouseLeave:Connect(function()
+        if self._activeSectionId ~= sectionId then
+            TweenService:Create(row, hoverInfo, { BackgroundColor3 = t.colors.surface }):Play()
         end
     end)
-    btn.MouseButton1Click:Connect(function()
+    row.MouseButton1Click:Connect(function()
         if self._sections[sectionId] then
             self:SetActiveSection(sectionId)
+            self:_updateSidebarVisuals()
         end
     end)
-    self._sidebarButtons[sectionId] = btn
+    self._sidebarButtons[sectionId] = row
+    self._sidebarRows[sectionId] = { Row = row, Label = row, Accent = accentBar }
+    self:_updateSidebarVisuals()
 end
 
 function UI:CreatePage(a: string, b: string?): Frame
@@ -452,12 +459,18 @@ function UI:_rebuildTabBarForSection(sectionId: string)
         divider.Size = UDim2.new(1,0,0,1)
         divider.Parent = self._tabBar
     end
+    local title = self._tabBar:FindFirstChild("Title")
+    if title and title:IsA("TextLabel") then
+        title.Position = UDim2.new(0,12,0,8)
+        title.Size = UDim2.new(0,120,0,28)
+        title.TextColor3 = theme.colors.textMuted
+    end
     local chipRow = Instance.new("Frame")
     chipRow.Name = "ChipRow"
     chipRow.BackgroundTransparency = 1
     chipRow.AutomaticSize = Enum.AutomaticSize.Y
-    chipRow.Size = UDim2.new(1,-16,0,36)
-    chipRow.Position = UDim2.new(0,8,0,6)
+    chipRow.Size = UDim2.new(1,-152,0,36) -- accounts for title + padding
+    chipRow.Position = UDim2.new(0,140,0,6)
     chipRow.Parent = self._tabBar
     local rowLayout = Instance.new("UIListLayout")
     rowLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -524,22 +537,7 @@ function UI:SetActiveSection(sectionId: string)
     for id, sec in pairs(self._sections) do
         sec.container.Visible = (id == sectionId)
     end
-    -- Sidebar highlight
-    if self._sidebarButtons then
-        for id, btn in pairs(self._sidebarButtons) do
-            local accent = btn:FindFirstChild("Accent")
-            if id == sectionId then
-                btn.TextColor3 = self._theme.colors.text
-                if accent then accent.Visible = true end
-                btn.BackgroundTransparency = 0
-                btn.BackgroundColor3 = self._theme.colors.surfaceAlt
-            else
-                btn.TextColor3 = self._theme.colors.textMuted
-                if accent then accent.Visible = false end
-                btn.BackgroundTransparency = 1
-            end
-        end
-    end
+    -- Sidebar visuals handled centrally
     self:_rebuildTabBarForSection(sectionId)
     local sec = self._sections[sectionId]
     local first = (sec.tabs[1] and sec.tabs[1].id) and tostring(sec.tabs[1].id) or nil
@@ -547,6 +545,7 @@ function UI:SetActiveSection(sectionId: string)
     if nextTab then
         self:SetActiveTab(nextTab)
     end
+    self:_updateSidebarVisuals()
 end
 
 function UI:SetActiveTab(tabId: string)
@@ -592,6 +591,7 @@ function UI:SetActiveTab(tabId: string)
         self._signals.TabSelected:Fire(tabId)
     end
     if self._markDirty then self:_markDirty() end
+    self:_updateSidebarVisuals()
 end
 
 ---------------------------------------------------------------------
@@ -604,6 +604,39 @@ function UI:SetTheme(overrides: {[string]: any})
     -- minimal live accent update for existing tab underline / toggles
     for _, comp in pairs(self._tabButtons or {}) do
         if comp.Underline then comp.Underline.BackgroundColor3 = self._theme.colors.accent end
+    end
+end
+
+-- Sidebar visuals helper
+function UI:_updateSidebarVisuals()
+    if not self._sidebarRows then return end
+    local t = self._theme
+    for sid, comp in pairs(self._sidebarRows) do
+        local isActive = (self._activeSectionId == tostring(sid))
+        local row = comp.Row; local label = comp.Label; local acc = comp.Accent
+        if row and label and acc then
+            row.BackgroundColor3 = isActive and t.colors.surfaceAlt or t.colors.surface
+            label.TextColor3 = isActive and t.colors.text or t.colors.textMuted
+            acc.Visible = isActive
+        end
+    end
+end
+
+-- Shadow sync helper
+function UI:_syncShadow()
+    if not self._softShadowRoot or not self._window then return end
+    local win = self._window
+    local root = self._softShadowRoot
+    root.Position = win.Position + UDim2.new(0,-20,0,-20)
+    root.Size = win.Size + UDim2.new(0,40,0,40)
+    local radii = self._theme.radii.lg
+    local layers = { S1 = 24, S2 = 16, S3 = 8 }
+    for name, offset in pairs(layers) do
+        local layer = root:FindFirstChild(name) :: Frame
+        if layer then
+            layer.Position = UDim2.new(0, offset, 0, offset)
+            layer.Size = win.Size + UDim2.new(0, offset * -2, 0, offset * -2)
+        end
     end
 end
 
@@ -762,24 +795,28 @@ function UI.new(opts: NewOptions?): UIInstance
     })
     applyCorner(window, theme.radii.lg)
     applyStroke(window, theme.colors.stroke, 1, 0.15)
-    -- Soft shadow approximation
-    local shadow = Instance.new("Frame")
-    shadow.Name = "Shadow"
-    shadow.BackgroundTransparency = 1
-    shadow.Size = window.Size
-    shadow.Position = window.Position
-    shadow.AnchorPoint = window.AnchorPoint
-    shadow.ZIndex = 0
-    shadow.Parent = screen
-    local shadowInner = Instance.new("Frame")
-    shadowInner.Name = "BlurApprox"
-    shadowInner.BackgroundColor3 = Color3.new(0,0,0)
-    shadowInner.BackgroundTransparency = 0.85
-    shadowInner.Size = UDim2.new(1,16,1,16)
-    shadowInner.Position = UDim2.new(0,-8,0,-4)
-    shadowInner.BorderSizePixel = 0
-    shadowInner.Parent = shadow
-    local shadowCorner = Instance.new("UICorner"); shadowCorner.CornerRadius = UDim.new(0, theme.radii.lg + 4); shadowCorner.Parent = shadowInner
+    -- Layered soft shadow root
+    local softRoot = Instance.new("Frame")
+    softRoot.Name = "SoftShadowRoot"
+    softRoot.BackgroundTransparency = 1
+    softRoot.Active = false
+    softRoot.ZIndex = 0
+    softRoot.Parent = screen
+    local function mkLayer(name, offset, transparency)
+        local f = Instance.new("Frame")
+        f.Name = name
+        f.BackgroundColor3 = Color3.new(0,0,0)
+        f.BackgroundTransparency = transparency
+        f.BorderSizePixel = 0
+        f.Parent = softRoot
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(0, theme.radii.lg)
+        c.Parent = f
+        return f
+    end
+    mkLayer("S1", 24, 0.90)
+    mkLayer("S2", 16, 0.93)
+    mkLayer("S3", 8, 0.96)
 
     -- Sticker (decor/branding / handle)
     local sticker = create("Frame", {
@@ -879,9 +916,12 @@ function UI.new(opts: NewOptions?): UIInstance
         _activeTabs = {},
         _tabButtons = {},
         _sidebarButtons = {},
+        _sidebarRows = {},
+        _softShadowRoot = softRoot,
     }, UI)
 
     self:setLayerAndLayout()
+    self:_syncShadow()
 
     -- Demo autobuild (initial section and pages)
     self:CreateSection("settings", {
