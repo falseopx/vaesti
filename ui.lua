@@ -623,17 +623,20 @@ function Library.new(opts)
   })
   shadow.Parent = main
   self._themeBindings[shadow] = { ImageTransparency = "shadowTransparency" }
-  local rootLayout = Instance.new("UIListLayout")
-  rootLayout.FillDirection = Enum.FillDirection.Horizontal
-  rootLayout.Padding = UDim.new(0, 0)
-  rootLayout.SortOrder = Enum.SortOrder.LayoutOrder
-  rootLayout.Parent = main
+  -- Remove any stray layout that would override absolute positioning
+  local existingLayout = main:FindFirstChildOfClass("UIListLayout")
+  if existingLayout then existingLayout:Destroy() end
+
+  -- Layout constants (explicit positioning; virtual list handles its own inner layouts)
+  local TAB_H = 48
+  local SIDEBAR_W = 240
   local sidebar = create("Frame", {
     Name = "Sidebar",
     BackgroundColor3 = self._theme.panel,
     BorderSizePixel = 0,
-    Size = UDim2.new(0, 240, 1, 0),
-    LayoutOrder = 1,
+    Size = UDim2.new(0, SIDEBAR_W, 1, -TAB_H),
+    Position = UDim2.new(0, 0, 0, TAB_H),
+    ZIndex = 4,
   })
   applyStroke(sidebar, self._theme.stroke, 1, 0.3)
   applyCornerRadius(sidebar, self._theme.radius)
@@ -711,27 +714,23 @@ function Library.new(opts)
     Name = "Content",
     BackgroundColor3 = self._theme.card,
     BorderSizePixel = 0,
-    Size = UDim2.new(1, -240, 1, 0),
-    LayoutOrder = 2,
+    Position = UDim2.new(0, SIDEBAR_W, 0, TAB_H),
+    Size = UDim2.new(1, -SIDEBAR_W, 1, -TAB_H),
+    ZIndex = 2,
   })
   applyCornerRadius(content, self._theme.radius)
   content.Parent = main
   self.Content = content
 
-  local contentLayout = Instance.new("UIListLayout")
-  contentLayout.FillDirection = Enum.FillDirection.Vertical
-  contentLayout.Padding = UDim.new(0, 0)
-  contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
-  contentLayout.Parent = content
-
   local tabBarHolder = create("Frame", {
     Name = "TabBar",
     BackgroundTransparency = 1,
     BorderSizePixel = 0,
-    Size = UDim2.new(1, 0, 0, 64),
-    LayoutOrder = 1,
+    Size = UDim2.new(1, 0, 0, TAB_H),
+    Position = UDim2.new(0, SIDEBAR_W, 0, 0),
+    ZIndex = 3,
   })
-  tabBarHolder.Parent = content
+  tabBarHolder.Parent = main
   self.TabBarHolder = tabBarHolder
 
   local tabLayout = Instance.new("UIListLayout")
@@ -744,10 +743,11 @@ function Library.new(opts)
   local pageArea = create("Frame", {
     Name = "PageArea",
     BackgroundTransparency = 1,
-    Size = UDim2.new(1, 0, 1, -64),
-    LayoutOrder = 2,
+    Position = UDim2.new(0, SIDEBAR_W, 0, TAB_H),
+    Size = UDim2.new(1, -SIDEBAR_W, 1, -TAB_H),
+    ZIndex = 2,
   })
-  pageArea.Parent = content
+  pageArea.Parent = main
   self.PageArea = pageArea
 
   local pagePadding = createPadding(pageArea, 24)
@@ -834,8 +834,8 @@ function Library:_makeDraggable(frame)
   local topHitbox = create("Frame", {
     Name = "DragHandle",
     BackgroundTransparency = 1,
-    Size = UDim2.new(1, -240, 0, 48),
-    Position = UDim2.new(0, 240, 0, 0),
+    Size = UDim2.new(1, -240, 0, 48), -- exclude sidebar width
+    Position = UDim2.new(0, 240, 0, 0), -- start after sidebar
     ZIndex = 2,
   })
   topHitbox.Parent = frame
