@@ -664,22 +664,17 @@ end
 
 -- Shadow sync helper (positions shadow layers to follow window without input interception)
 function UI:_syncShadow()
-    local root = self._shadowRoot or self._softShadowRoot
-    if not root or not self._window then return end
+    if not self._window or not self._shadowRoot then return end
     local win = self._window
-    root.AnchorPoint = win.AnchorPoint
-    root.Position = win.Position
-    root.Size = win.Size
-    -- Recenter layers with padded sizes
-    local pads = { S1 = 24, S2 = 16, S3 = 8 }
-    for name, pad in pairs(pads) do
-        local layer = root:FindFirstChild(name)
-        if layer and layer:IsA("Frame") then
-            layer.AnchorPoint = Vector2.new(0.5,0.5)
-            layer.Position = UDim2.new(0.5,0,0.5,0)
-            layer.Size = win.Size + UDim2.new(0, pad*2, 0, pad*2)
-            layer.Active = false
-        end
+    local img = self._shadowRoot
+
+    if img:IsA("ImageLabel") then
+        -- Keep a tunable padding; default 36px around window
+        local pad = self._shadowPadding or 36
+        img.AnchorPoint = win.AnchorPoint
+        img.Position = win.Position
+        img.Size = win.Size + UDim2.fromOffset(pad * 2, pad * 2)
+        img.Active = false
     end
 end
 
@@ -694,6 +689,7 @@ function UI:CenterWindow()
     self._window.Position = UDim2.new(0.5, 0, 0.5, 0)
     self._window.AnchorPoint = Vector2.new(0.5, 0.5)
     self:setLayerAndLayout()
+    self:_syncShadow()
 end
 
 ---------------------------------------------------------------------
@@ -864,39 +860,28 @@ function UI.new(opts: NewOptions?): UIInstance
     })
     applyCorner(window, theme.radii.lg)
     applyStroke(window, theme.colors.stroke, 1, 0.15)
-    -- Layered soft shadow root
-    local softRoot = Instance.new("Frame")
-    softRoot.Name = "SoftShadowRoot"
-    softRoot.BackgroundTransparency = 1
-    softRoot.Active = false
-    softRoot.ZIndex = 0
-    softRoot.AnchorPoint = Vector2.new(0.5, 0.5)
-    softRoot.Position = window.Position
-    softRoot.Size = window.Size
-    softRoot.ClipsDescendants = false
-    softRoot.Parent = screen
-    local function mkLayer(name, offset, transparency)
-        local f = Instance.new("Frame")
-        f.Name = name
-        f.BackgroundColor3 = Color3.new(0,0,0)
-        f.BackgroundTransparency = transparency
-        f.BorderSizePixel = 0
-        f.AnchorPoint = Vector2.new(0.5, 0.5)
-        f.Position = UDim2.new(0.5, 0, 0.5, offset)
-        f.Size = window.Size + UDim2.new(0, offset * 2, 0, offset * 2)
-        f.Active = false
-        f.ZIndex = 0
-        f.ClipsDescendants = false
-        f:SetAttribute("Offset", offset)
-        f.Parent = softRoot
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(0, theme.radii.lg)
-        c.Parent = f
-        return f
-    end
-    mkLayer("S1", 24, 0.92)
-    mkLayer("S2", 16, 0.94)
-    mkLayer("S3", 8, 0.965)
+    -- Acrylic Shadow (ImageLabel behind the window)
+    local SH_IMAGE   = "rbxassetid://74197701220477"
+    local SH_PADDING = 36  -- extra pixels around window
+    local SH_OPACITY = 0.92
+    local SH_COLOR   = Color3.new(0,0,0)
+    -- For a 256/512px PNG, center slice keeps corners soft. Adjust if needed.
+    local SH_SLICE   = Rect.new(100,100,156,156)
+
+    local shadowRoot = Instance.new("ImageLabel")
+    shadowRoot.Name = "AcrylicShadow"
+    shadowRoot.BackgroundTransparency = 1
+    shadowRoot.ScaleType = Enum.ScaleType.Slice
+    shadowRoot.SliceCenter = SH_SLICE
+    shadowRoot.Image = SH_IMAGE
+    shadowRoot.ImageTransparency = 1 - SH_OPACITY
+    shadowRoot.ImageColor3 = SH_COLOR
+    shadowRoot.AnchorPoint = Vector2.new(0.5, 0.5)
+    shadowRoot.ZIndex = 0
+    shadowRoot.Active = false
+    shadowRoot.Parent = screen
+
+    -- assigned after self creation
 
     -- Sticker (decor/branding / handle)
     local sticker = create("Frame", {
@@ -1022,8 +1007,8 @@ function UI.new(opts: NewOptions?): UIInstance
         _tabButtons = {},
         _sidebarButtons = {},
         _sidebarRows = {},
-        _softShadowRoot = softRoot,
-        _shadowRoot = softRoot,
+    _softShadowRoot = nil,
+    _shadowRoot = shadowRoot,
         _titleLabel = title,
         _viewportConn = nil,
     }, UI)
