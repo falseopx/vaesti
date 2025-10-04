@@ -1000,6 +1000,18 @@ function Library:ApplyState(state)
 end
 --// Sidebar ----------------------------------------------------------------
 
+-- Helper to safely retrieve sidebar cell UI parts without indexing nil
+local function getCellParts(holder)
+  local button = holder:FindFirstChild("Button")
+  if not button then return end
+  local icon = button:FindFirstChild("Icon")
+  local label = button:FindFirstChild("Label")
+  local indicator = button:FindFirstChild("Indicator")
+  if icon and label and indicator then
+    return button, icon, label, indicator
+  end
+end
+
 function Library:CreateSidebar(items, opts)
   opts = opts or {}
   self._sidebarItems = items or {}
@@ -1013,53 +1025,61 @@ function Library:CreateSidebar(items, opts)
         holder:SetAttribute("built", true)
         holder.BackgroundTransparency = 1
 
-        local button = create("TextButton", {
-        Name = "Button",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        AutoButtonColor = false,
-        Text = "",
-        }); button.Parent = holder
+        local newButton = create("TextButton", {
+          Name = "Button",
+          BackgroundTransparency = 1,
+          BorderSizePixel = 0,
+          Size = UDim2.new(1, 0, 1, 0),
+          AutoButtonColor = false,
+          Text = "",
+        }); newButton.Parent = holder
 
-        local icon = create("TextLabel", {
-        Name = "Icon",
-        BackgroundTransparency = 1,
-        Font = Enum.Font.GothamSemibold,
-        TextSize = 16,
-        TextColor3 = self._theme.textMuted,
-        Text = "-",
-        Size = UDim2.new(0, 32, 0, 32),
-        Position = UDim2.new(0, 8, 0.5, -16),
-        }); icon.Parent = button
+        local newIcon = create("TextLabel", {
+          Name = "Icon",
+          BackgroundTransparency = 1,
+          Font = Enum.Font.GothamSemibold,
+          TextSize = 16,
+          TextColor3 = self._theme.textMuted,
+          Text = "-",
+          Size = UDim2.new(0, 32, 0, 32),
+          Position = UDim2.new(0, 8, 0.5, -16),
+        }); newIcon.Parent = newButton
 
-        local label = create("TextLabel", {
-        Name = "Label",
-        BackgroundTransparency = 1,
-        Font = Enum.Font.Gotham,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextYAlignment = Enum.TextYAlignment.Center,
-        Text = "Item",
-        TextColor3 = self._theme.text,
-        Size = UDim2.new(1, -48, 1, 0),
-        Position = UDim2.new(0, 48, 0, 0),
-        }); label.Parent = button
+        local newLabel = create("TextLabel", {
+          Name = "Label",
+          BackgroundTransparency = 1,
+          Font = Enum.Font.Gotham,
+          TextSize = 14,
+          TextXAlignment = Enum.TextXAlignment.Left,
+          TextYAlignment = Enum.TextYAlignment.Center,
+          Text = "Item",
+          TextColor3 = self._theme.text,
+          Size = UDim2.new(1, -48, 1, 0),
+          Position = UDim2.new(0, 48, 0, 0),
+        }); newLabel.Parent = newButton
 
-        local indicator = create("Frame", {
-        Name = "Indicator",
-        BackgroundColor3 = self._theme.accent,
-        Size = UDim2.new(0, 3, 0, 24),
-        Position = UDim2.new(0, 2, 0.5, -12),
-        Visible = false,
-        }); applyCornerRadius(indicator, 4); indicator.Parent = button
+        local newIndicator = create("Frame", {
+          Name = "Indicator",
+          BackgroundColor3 = self._theme.accent,
+          Size = UDim2.new(0, 3, 0, 24),
+          Position = UDim2.new(0, 2, 0.5, -12),
+          Visible = false,
+        }); applyCornerRadius(newIndicator, 4); newIndicator.Parent = newButton
+
+        -- Immediately re-fetch after build to avoid stale locals / race
+        local button = holder:FindFirstChild("Button")
+        if not button then return end
+        local icon = button:FindFirstChild("Icon")
+        local label = button:FindFirstChild("Label")
+        local indicator = button:FindFirstChild("Indicator")
+        if not (icon and label and indicator) then return end
     end
 
-    -- look up children by name (no custom fields on Instances)
-    local button    = holder:FindFirstChild("Button")
-    local icon      = holder:FindFirstChild("Icon")
-    local label     = holder:FindFirstChild("Label")
-    local indicator = holder:FindFirstChild("Indicator")
+    -- Guarded lookup (children live under the Button, not directly under holder)
+    local button, icon, label, indicator = getCellParts(holder)
+    if not button then
+        return -- defer until next virtualization pass
+    end
 
     -- per-holder maid from weak table
     local cellMaid = self._sidebarCellMaids[holder]
