@@ -2151,7 +2151,17 @@ function Library:_buildAppearanceSample()
     { id = "integrations", label = "Integrations" },
   }
   self:CreateTabBar(tabs)
-  local appearancePage = self:CreatePage("appearance")
+
+  -- Create core pages after tab bar
+  local pageAccount    = self:CreatePage("account")
+  local pageAppearance = self:CreatePage("appearance")
+  local pageBilling    = self:CreatePage("billing")
+
+  -- Minimal placeholders so pages are not empty
+  self:Card(pageAccount, { title = "Account", description = "Manage profile & credentials." })
+  self:Card(pageBilling, { title = "Billing", description = "Invoices, payment methods, usage." })
+
+  -- Build the sample UI into the appearance page
   local heading = create("TextLabel", {
     BackgroundTransparency = 1,
     Font = Enum.Font.GothamSemibold,
@@ -2161,7 +2171,7 @@ function Library:_buildAppearanceSample()
     Text = "Appearance",
     Size = UDim2.new(1, 0, 0, 28),
   })
-  heading.Parent = appearancePage
+  heading.Parent = pageAppearance
   local subheading = create("TextLabel", {
     BackgroundTransparency = 1,
     Font = Enum.Font.Gotham,
@@ -2173,9 +2183,9 @@ function Library:_buildAppearanceSample()
     AutomaticSize = Enum.AutomaticSize.Y,
     Size = UDim2.new(1, 0, 0, 0),
   })
-  subheading.Parent = appearancePage
+  subheading.Parent = pageAppearance
 
-  local brandCard = self:Card(appearancePage, {
+  local brandCard = self:Card(pageAppearance, {
     title = "Brand color",
     description = "Select or customize your brand color.",
   })
@@ -2188,7 +2198,7 @@ function Library:_buildAppearanceSample()
     end,
   })
 
-  local chartCard = self:Card(appearancePage, {
+  local chartCard = self:Card(pageAppearance, {
     title = "Dashboard charts",
     description = "How charts are displayed.",
   })
@@ -2206,7 +2216,7 @@ function Library:_buildAppearanceSample()
     end,
   })
 
-  local languageCard = self:Card(appearancePage, {
+  local languageCard = self:Card(pageAppearance, {
     title = "Language",
     description = "Default language for public dashboard.",
   })
@@ -2224,7 +2234,7 @@ function Library:_buildAppearanceSample()
     end,
   })
 
-  local cookieCard = self:Card(appearancePage, {
+  local cookieCard = self:Card(pageAppearance, {
     title = "Cookie banner",
     description = "Display cookie banners to visitors.",
   })
@@ -2245,7 +2255,7 @@ function Library:_buildAppearanceSample()
     BackgroundTransparency = 1,
     Size = UDim2.new(1, 0, 0, 60),
   })
-  footer.Parent = appearancePage
+  footer.Parent = pageAppearance
   local footerLayout = Instance.new("UIListLayout")
   footerLayout.FillDirection = Enum.FillDirection.Horizontal
   footerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
